@@ -1,0 +1,5 @@
+PS F:\ca-office-source\backend> @"
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+"@ | Out-File -FilePath "styles\tailwind.css" -Encoding utf8

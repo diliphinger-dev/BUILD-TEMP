@@ -1,0 +1,39 @@
+# Build outputs
+backend/dist/
+backend/dist-final/
+backend/electron-installer/
+backend/secure-installer*/
+backend/safe-build-*/
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment files
+.env
+*.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+
+# Temporary files
+temp/
+tmp/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+backup-original/
+build-scripts/

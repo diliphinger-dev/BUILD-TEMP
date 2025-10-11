@@ -1,0 +1,24 @@
+{
+  "name": "ca-office-deployment",
+  "version": "1.0.0",
+  "description": "Deployment configuration for CA Office Automation System",
+  "scripts": {
+    "build-all": "npm run build-backend && npm run build-frontend && npm run prepare-electron",
+    "build-backend": "cd backend && npm install --production && npm run build",
+    "build-frontend": "cd frontend && npm install && npm run build",
+    "prepare-electron": "node scripts/prepare-electron.js",
+    "electron-build": "cd backend && npm run dist",
+    "clean": "rimraf dist/ backend/dist/ frontend/build/ backend/node_modules/ frontend/node_modules/",
+    "setup-dev": "npm run clean && npm install && cd backend && npm install && cd ../frontend && npm install",
+    "test-build": "npm run build-all && cd backend && npm run electron"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "fs-extra": "^11.2.0",
+    "rimraf": "^5.0.5"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

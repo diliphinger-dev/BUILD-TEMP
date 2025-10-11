@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Office License Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin-bottom: 2rem;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card-header {
+            background: var(--primary-gradient);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.5rem;
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+        
+        .license-output {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 1.5rem;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            min-height: 150px;
+            position: relative;
+        }
+        
+        .license-key-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            font-size: 0.9rem;
+            position: relative;
+            margin: 1rem 0;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .feature-checkbox {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s;
+        }
+        
+        .feature-checkbox:hover {
+            border-color: #667eea;
+            background: #f9fafb;
+        }
+        
+        .feature-checkbox input:checked + label {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .btn-generate {
+            background: var(--primary-gradient);
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .stat-box {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-box .icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-box .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        
+        .stat-box .label {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+        
+        .license-info-box {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .license-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .license-info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .license-info-item .label {
+            font-weight: 600;
+            color: #4b5563;
+        }
+        
+        .license-info-item .value {
+            color: #1f2937;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .quick-action-btn {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            transition: all 0.3s;
+        }
+        
+        .quick-action-btn:hover {
+            border-color: #667eea;
+            background: #f9fafb;
+        }
+        
+        .tab-button {
+            background: transparent;
+            border: none;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab-button.active {
+            color: white;
+            border-bottom-color: white;
+        }
+        
+        .tab-content-section {
+            display: none;
+        }
+        
+        .tab-content-section.active {
+            display: block;
+        }
+        
+        .history-item {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+        
+        .history-item:hover {
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .badge-custom {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .toast-custom {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            min-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1><i class="fas fa-shield-alt me-3"></i>CA Office License Generator</h1>
+                    <p class="mb-0 mt-2" style="opacity: 0.9;">Professional License Management System</p>
+                </div>
+                <div class="text-end">
+                    <div class="stat-box d-inline-block" style="min-width: 150px;">
+                        <div class="value" id="generatedCount">0</div>
+                        <div class="label">Licenses Generated</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="mt-4">
+                <button class="tab-button active" onclick="switchTab('generate')">
+                    <i class="fas fa-plus-circle me-2"></i>Generate License
+                </button>
+                <button class="tab-button" onclick="switchTab('verify')">
+                    <i class="fas fa-check-circle me-2"></i>Verify License
+                </button>
+                <button class="tab-button" onclick="switchTab('history')">
+                    <i class="fas fa-history me-2"></i>History
+                </button>
+            </div>
+        </div>
+
+        <!-- Generate License Tab -->
+        <div id="generate-tab" class="tab-content-section active">
+            <div class="row">
+                <!-- Left Column - Form -->
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-file-alt me-2"></i>License Details
+                        </div>
+                        <div class="card-body">
+                            <form id="licenseForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Company Name *</label>
+                                        <input type="text" class="form-control form-control-lg" id="companyName" required placeholder="Acme Corporation">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Contact Email *</label>
+                                        <input type="email" class="form-control form-control-lg" id="contactEmail" required placeholder="admin@company.com">
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">License Type</label>
+                                        <select class="form-select form-select-lg" id="licenseType" onchange="updateLicenseType()">
+                                            <option value="trial">Trial (30 days, 3 users)</option>
+                                            <option value="standard">Standard (1 year, 5 users)</option>
+                                            <option value="professional" selected>Professional (1 year, 10 users)</option>
+                                            <option value="enterprise">Enterprise (1 year, 25 users)</option>
+                                            <option value="lifetime">Lifetime (99 years, unlimited)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Max Users</label>
+                                        <input type="number" class="form-control form-control-lg" id="maxUsers" value="10" min="1" max="1000">
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Issue Date</label>
+                                        <input type="date" class="form-control form-control-lg" id="issueDate" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Expiry Date</label>
+                                        <input type="date" class="form-control form-control-lg" id="expiryDate" required>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Features</label>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="feature-checkbox">
+                                                <input type="checkbox" class="form-check-input me-2" id="feature1" checked>
+                                                <label class="form-check-label" for="feature1">Advanced Reports</label>
+                                            </div>
+                                            <div class="feature-checkbox">
+                                                <input type="checkbox" class="form-check-input me-2" id="feature2" checked>
+                                                <label class="form-check-label" for="feature2">API Access</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="feature-checkbox">
+                                                <input type="checkbox" class="form-check-input me-2" id="feature3" checked>
+                                                <label class="form-check-label" for="feature3">Custom Branding</label>
+                                            </div>
+                                            <div class="feature-checkbox">
+                                                <input type="checkbox" class="form-check-input me-2" id="feature4" checked>
+                                                <label class="form-check-label" for="feature4">Priority Support</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-generate w-100">
+                                    <i class="fas fa-key me-2"></i>Generate License Key
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-bolt me-2"></i>Quick Actions
+                        </div>
+                        <div class="card-body">
+                            <button class="quick-action-btn" onclick="generateQuickLicense('trial')">
+                                <i class="fas fa-clock me-2"></i>Generate 30-Day Trial
+                            </button>
+                            <button class="quick-action-btn" onclick="generateQuickLicense('standard')">
+                                <i class="fas fa-star me-2"></i>Generate Standard License
+                            </button>
+                            <button class="quick-action-btn" onclick="generateQuickLicense('lifetime')">
+                                <i class="fas fa-infinity me-2"></i>Generate Lifetime License
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column - Output -->
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-key me-2"></i>Generated License Key
+                        </div>
+                        <div class="card-body">
+                            <div id="licenseOutput" class="license-output text-center">
+                                <i class="fas fa-key fa-4x text-muted mb-3"></i>
+                                <p class="text-muted">Your license key will appear here after generation</p>
+                            </div>
+                            
+                            <div id="licenseDetails" style="display: none;">
+                                <div class="license-info-box">
+                                    <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>License Information</h6>
+                                    <div class="license-info-item">
+                                        <span class="label">Company:</span>
+                                        <span class="value" id="info-company">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">Email:</span>
+                                        <span class="value" id="info-email">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">Type:</span>
+                                        <span class="value" id="info-type">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">Max Users:</span>
+                                        <span class="value" id="info-users">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">Issued:</span>
+                                        <span class="value" id="info-issued">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">Expires:</span>
+                                        <span class="value" id="info-expiry">-</span>
+                                    </div>
+                                    <div class="license-info-item">
+                                        <span class="label">License ID:</span>
+                                        <span class="value" id="info-id">-</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <button class="btn btn-outline-primary w-100 mb-2" onclick="downloadLicense()">
+                                        <i class="fas fa-download me-2"></i>Download as Text
+                                    </button>
+                                    <button class="btn btn-outline-secondary w-100" onclick="exportAsJSON()">
+                                        <i class="fas fa-file-code me-2"></i>Export as JSON
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-bar me-2"></i>Statistics
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6 mb-3">
+                                    <div class="stat-box">
+                                        <div class="icon"><i class="fas fa-file-alt"></i></div>
+                                        <div class="value" id="stat-total">0</div>
+                                        <div class="label">Total Generated</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <div class="stat-box">
+                                        <div class="icon"><i class="fas fa-clock"></i></div>
+                                        <div class="value" id="stat-today">0</div>
+                                        <div class="label">Today</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verify License Tab -->
+        <div id="verify-tab" class="tab-content-section">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-check-circle me-2"></i>Verify License Key
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Enter License Key</label>
+                                <textarea class="form-control" id="verifyLicenseKey" rows="4" placeholder="Paste license key here..."></textarea>
+                            </div>
+                            <button class="btn btn-primary btn-generate w-100" onclick="verifyLicense()">
+                                <i class="fas fa-check me-2"></i>Verify License
+                            </button>
+                            
+                            <div id="verifyResult" class="mt-4" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="history-tab" class="tab-content-section">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-history me-2"></i>License Generation History</span>
+                    <button class="btn btn-sm btn-light" onclick="clearHistory()">
+                        <i class="fas fa-trash me-1"></i>Clear History
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="historyList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <script>
+        // License Secret Key
+        const LICENSE_SECRET = 'CA-OFFICE-LICENSE-SECRET-KEY-2024';
+        
+        // Storage
+        let licenseHistory = JSON.parse(localStorage.getItem('licenseHistory') || '[]');
+        let currentLicenseData = null;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('issueDate').value = today;
+            updateLicenseType();
+            updateStatistics();
+            updateHistory();
+        });
+        
+        // Tab Switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content-section').forEach(section => section.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            if (tabName === 'history') {
+                updateHistory();
+            }
+        }
+        
+        // Update license type defaults
+        function updateLicenseType() {
+            const type = document.getElementById('licenseType').value;
+            const issueDate = new Date(document.getElementById('issueDate').value || new Date());
+            const expiryDate = new Date(issueDate);
+            
+            const typeDefaults = {
+                'trial': { days: 30, users: 3 },
+                'standard': { days: 365, users: 5 },
+                'professional': { days: 365, users: 10 },
+                'enterprise': { days: 365, users: 25 },
+                'lifetime': { days: 36135, users: 999 } // 99 years
+            };
+            
+            const defaults = typeDefaults[type];
+            expiryDate.setDate(expiryDate.getDate() + defaults.days);
+            
+            document.getElementById('expiryDate').value = expiryDate.toISOString().split('T')[0];
+            document.getElementById('maxUsers').value = defaults.users;
+            
+            // Update features based on type
+            const features = ['feature1', 'feature2', 'feature3', 'feature4'];
+            features.forEach((id, index) => {
+                document.getElementById(id).checked = 
+                    type === 'trial' ? index < 1 : 
+                    type === 'standard' ? index < 2 : true;
+            });
+        }
+        
+        // Generate UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+        
+        // Simple JWT-like encoding
+        function createLicenseToken(data) {
+            const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+            const payload = btoa(JSON.stringify(data));
+            const signature = CryptoJS.HmacSHA256(header + '.' + payload, LICENSE_SECRET).toString();
+            return header + '.' + payload + '.' + signature;
+        }
+        
+        // Decode license token
+        function decodeLicenseToken(token) {
+            try {
+                const parts = token.split('.');
+                if (parts.length !== 3) return null;
+                
+                const header = parts[0];
+                const payload = parts[1];
+                const signature = parts[2];
+                
+                const expectedSignature = CryptoJS.HmacSHA256(header + '.' + payload, LICENSE_SECRET).toString();
+                
+                if (signature !== expectedSignature) {
+                    return { valid: false, reason: 'Invalid signature' };
+                }
+                
+                const data = JSON.parse(atob(payload));
+                const expiryDate = new Date(data.expiry);
+                const now = new Date();
+                
+                if (expiryDate < now) {
+                    return { valid: false, reason: 'License expired', data };
+                }
+                
+                return { valid: true, data };
+            } catch (error) {
+                return { valid: false, reason: 'Invalid license format' };
+            }
+        }
+        
+        // Form submission
+        document.getElementById('licenseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            generateLicense();
+        });
+        
+        // Generate license
+        function generateLicense() {
+            const licenseData = {
+                company: document.getElementById('companyName').value,
+                email: document.getElementById('contactEmail').value,
+                type: document.getElementById('licenseType').value,
+                users: parseInt(document.getElementById('maxUsers').value),
+                issued: document.getElementById('issueDate').value,
+                expiry: document.getElementById('expiryDate').value,
+                licenseId: generateUUID(),
+                features: {
+                    advancedReports: document.getElementById('feature1').checked,
+                    apiAccess: document.getElementById('feature2').checked,
+                    customBranding: document.getElementById('feature3').checked,
+                    prioritySupport: document.getElementById('feature4').checked
+                }
+            };
+            
+            const licenseKey = createLicenseToken(licenseData);
+            currentLicenseData = licenseData;
+            
+            displayLicense(licenseKey, licenseData);
+            saveLicenseToHistory(licenseKey, licenseData);
+            showToast('License generated successfully!', 'success');
+            
+            updateStatistics();
+        }
+        
+        // Display license
+        function displayLicense(licenseKey, data) {
+            document.getElementById('licenseOutput').innerHTML = `
+                <div class="license-key-display">
+                    <button class="copy-btn" onclick="copyLicense('${licenseKey}')">
+                        <i class="fas fa-copy me-1"></i>Copy
+                    </button>
+                    ${licenseKey}
+                </div>
+            `;
+            
+            document.getElementById('licenseDetails').style.display = 'block';
+            document.getElementById('info-company').textContent = data.company;
+            document.getElementById('info-email').textContent = data.email;
+            document.getElementById('info-type').textContent = data.type.toUpperCase();
+            document.getElementById('info-users').textContent = data.users;
+            document.getElementById('info-issued').textContent = new Date(data.issued).toLocaleDateString();
+            document.getElementById('info-expiry').textContent = new Date(data.expiry).toLocaleDateString();
+            document.getElementById('info-id').textContent = data.licenseId;
+        }
+        
+        // Copy license
+        function copyLicense(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                showToast('License key copied to clipboard!', 'success');
+            });
+        }
+        
+        // Quick license generation
+        function generateQuickLicense(type) {
+            document.getElementById('licenseType').value = type;
+            updateLicenseType();
+            
+            if (!document.getElementById('companyName').value) {
+                document.getElementById('companyName').value = 'Quick License Company';
+            }
+            if (!document.getElementById('contactEmail').value) {
+                document.getElementById('contactEmail').value = 'contact@company.com';
+            }
+            
+            generateLicense();
+        }
+        
+        // Verify license
+        function verifyLicense() {
+            const licenseKey = document.getElementById('verifyLicenseKey').value.trim();
+            
+            if (!licenseKey) {
+                showToast('Please enter a license key', 'error');
+                return;
+            }
+            
+            const result = decodeLicenseToken(licenseKey);
+            const resultDiv = document.getElementById('verifyResult');
+            
+            if (result.valid) {
+                const data = result.data;
+                const daysRemaining = Math.ceil((new Date(data.expiry) - new Date()) / (1000 * 60 * 60 * 24));
+                
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h5><i class="fas fa-check-circle me-2"></i>Valid License</h5>
+                        <hr>
+                        <div class="license-info-box">
+                            <div class="license-info-item">
+                                <span class="label">Company:</span>
+                                <span class="value">${data.company}</span>
+                            </div>
+                            <div class="license-info-item">
+                                <span class="label">Email:</span>
+                                <span class="value">${data.email}</span>
+                            </div>
+                            <div class="license-info-item">
+                                <span class="label">Type:</span>
+                                <span class="value">${data.type.toUpperCase()}</span>
+                            </div>
+                            <div class="license-info-item">
+                                <span class="label">Max Users:</span>
+                                <span class="value">${data.users}</span>
+                            </div>
+                            <div class="license-info-item">
+                                <span class="label">Days Remaining:</span>
+                                <span class="value">${daysRemaining} days</span>
+                            </div>
+                            <div class="license-info-item">
+                                <span class="label">Expires:</span>
+                                <span class="value">${new Date(data.expiry).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                showToast('License is valid!', 'success');
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="fas fa-times-circle me-2"></i>Invalid License</h5>
+                        <p class="mb-0">Reason: ${result.reason}</p>
+                    </div>
+                `;
+                showToast('License is invalid!', 'error');
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+        
+        // Save to history
+        function saveLicenseToHistory(key, data) {
+            licenseHistory.unshift({
+                key,
+                data,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (licenseHistory.length > 50) {
+                licenseHistory = licenseHistory.slice(0, 50);
+            }
+            
+            localStorage.setItem('licenseHistory', JSON.stringify(licenseHistory));
+        }
+        
+        // Update history display
+        function updateHistory() {
+            const historyList = document.getElementById('historyList');
+            
+            if (licenseHistory.length === 0) {
+                historyList.innerHTML = '<p class="text-muted text-center">No licenses generated yet</p>';
+                return;
+            }
+            
+            historyList.innerHTML = licenseHistory.map((item, index) => {
+                const date = new Date(item.timestamp);
+                return `
+                    <div class="history-item">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="mb-1">${item.data.company}</h6>
+                                <small class="text-muted">${item.data.email}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge-custom bg-primary">${item.data.type}</span>
+                                <br>
+                                <small class="text-muted">${date.toLocaleString()}</small>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewHistoryLicense(${index})">
+                                <i class="fas fa-eye me-1"></i>View
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="copyLicense('${item.key}')">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteHistoryItem(${index})">
+                                <i class="fas fa-trash me-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // View history license
+        function viewHistoryLicense(index) {
+            const item = licenseHistory[index];
+            switchTab('generate');
+            displayLicense(item.key, item.data);
+        }
+        
+        // Delete history item
+        function deleteHistoryItem(index) {
+            if (confirm('Are you sure you want to delete this license from history?')) {
+                licenseHistory.splice(index, 1);
+                localStorage.setItem('licenseHistory', JSON.stringify(licenseHistory));
+                updateHistory();
+                updateStatistics();
+                showToast('License deleted from history', 'success');
+            }
+        }
+        
+        // Clear history
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all history?')) {
+                licenseHistory = [];
+                localStorage.setItem('licenseHistory', JSON.stringify(licenseHistory));
+                updateHistory();
+                updateStatistics();
+                showToast('History cleared', 'success');
+            }
+        }
+        
+        // Update statistics
+        function updateStatistics() {
+            const total = licenseHistory.length;
+            const today = new Date().toDateString();
+            const todayCount = licenseHistory.filter(item => 
+                new Date(item.timestamp).toDateString() === today
+            ).length;
+            
+            document.getElementById('generatedCount').textContent = total;
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-today').textContent = todayCount;
+        }
+        
+        // Download license
+        function downloadLicense() {
+            if (!currentLicenseData) return;
+            
+            const content = `CA OFFICE LICENSE KEY
+====================================
+
+Company: ${currentLicenseData.company}
+Email: ${currentLicenseData.email}
+Type: ${currentLicenseData.type.toUpperCase()}
+Max Users: ${currentLicenseData.users}
+Issued: ${new Date(currentLicenseData.issued).toLocaleDateString()}
+Expires: ${new Date(currentLicenseData.expiry).toLocaleDateString()}
+License ID: ${currentLicenseData.licenseId}
+
+LICENSE KEY:
+${document.querySelector('.license-key-display').textContent.trim()}
+
+====================================
+Generated by CA Office License Generator
+`;
+            
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `license_${currentLicenseData.company.replace(/\s+/g, '_')}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('License downloaded!', 'success');
+        }
+        
+        // Export as JSON
+        function exportAsJSON() {
+            if (!currentLicenseData) return;
+            
+            const exportData = {
+                ...currentLicenseData,
+                licenseKey: document.querySelector('.license-key-display').textContent.trim(),
+                generatedAt: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `license_${currentLicenseData.company.replace(/\s+/g, '_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('License exported as JSON!', 'success');
+        }
+        
+        // Toast notification
+        function showToast(message, type) {
+            const container = document.getElementById('toastContainer');
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            const color = type === 'success' ? '#10b981' : '#ef4444';
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-custom';
+            toast.innerHTML = `
+                <i class="fas ${icon} me-2" style="color: ${color}; font-size: 1.5rem;"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

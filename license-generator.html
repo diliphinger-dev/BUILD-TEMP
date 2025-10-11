@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CA Office Pro - License Key Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .result-box {
+            background: #f8f9fa;
+            border: 2px dashed #d0d0d0;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+            display: none;
+        }
+
+        .result-box.show {
+            display: block;
+            animation: slideDown 0.5s;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .license-key {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            font-size: 13px;
+            line-height: 1.8;
+            position: relative;
+            margin: 16px 0;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .info-item {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .quick-btn {
+            padding: 16px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .quick-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+            transform: translateY(-2px);
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-trial {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-1year {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .badge-3year {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .badge-5year {
+            background: #e2d9f3;
+            color: #432874;
+        }
+
+        .badge-lifetime {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 CA Office Pro</h1>
+            <p>Professional License Key Generator</p>
+        </div>
+
+        <div class="content">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('generate')">Generate License</button>
+                <button class="tab" onclick="switchTab('verify')">Verify License</button>
+                <button class="tab" onclick="switchTab('batch')">Batch Generate</button>
+            </div>
+
+            <!-- Generate Tab -->
+            <div id="generate" class="tab-content active">
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="quickGenerate('trial')">
+                        ⚡ 30-Day Trial
+                    </button>
+                    <button class="quick-btn" onclick="quickGenerate('1year')">
+                        ⭐ 1 Year License
+                    </button>
+                    <button class="quick-btn" onclick="quickGenerate('3year')">
+                        💎 3 Years License
+                    </button>
+                    <button class="quick-btn" onclick="quickGenerate('lifetime')">
+                        ♾️ Lifetime License
+                    </button>
+                </div>
+
+                <form id="generateForm" onsubmit="generateLicense(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Company Name *</label>
+                            <input type="text" class="form-control" id="companyName" required placeholder="Acme Corporation">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Contact Email *</label>
+                            <input type="email" class="form-control" id="email" required placeholder="admin@company.com">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">License Duration</label>
+                            <select class="form-control" id="duration" onchange="updateDuration()">
+                                <option value="1">30 Days (Trial)</option>
+                                <option value="12" selected>1 Year</option>
+                                <option value="36">3 Years</option>
+                                <option value="60">5 Years</option>
+                                <option value="1188">Lifetime (99 Years)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Maximum Users</label>
+                            <input type="number" class="form-control" id="maxUsers" value="5" min="1" max="999">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        🔑 Generate License Key
+                    </button>
+                </form>
+
+                <div id="result" class="result-box">
+                    <h3 style="margin-bottom: 16px; color: #333;">✅ License Generated Successfully!</h3>
+                    <div class="license-key" id="licenseKeyDisplay">
+                        <button class="copy-btn" onclick="copyLicense()">📋 Copy</button>
+                        <span id="licenseKeyText"></span>
+                    </div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Company</div>
+                            <div class="info-value" id="infoCompany"></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Email</div>
+                            <div class="info-value" id="infoEmail"></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Max Users</div>
+                            <div class="info-value" id="infoUsers"></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Valid Until</div>
+                            <div class="info-value" id="infoExpiry"></div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="downloadLicense()" style="flex: 1;">
+                            💾 Download
+                        </button>
+                        <button class="btn btn-secondary" onclick="emailLicense()" style="flex: 1;">
+                            📧 Prepare Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verify Tab -->
+            <div id="verify" class="tab-content">
+                <form onsubmit="verifyLicense(event)">
+                    <div class="form-group">
+                        <label class="form-label">Enter License Key to Verify</label>
+                        <textarea class="form-control" id="verifyKey" placeholder="Paste license key here..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        ✅ Verify License
+                    </button>
+                </form>
+                <div id="verifyResult"></div>
+            </div>
+
+            <!-- Batch Generate Tab -->
+            <div id="batch" class="tab-content">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalGenerated">0</div>
+                        <div class="stat-label">Total Generated</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="todayGenerated">0</div>
+                        <div class="stat-label">Generated Today</div>
+                    </div>
+                </div>
+
+                <form onsubmit="batchGenerate(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Number of Licenses</label>
+                            <input type="number" class="form-control" id="batchCount" value="10" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">License Type</label>
+                            <select class="form-control" id="batchType">
+                                <option value="1">Trial (30 Days)</option>
+                                <option value="12">1 Year</option>
+                                <option value="36">3 Years</option>
+                                <option value="60">5 Years</option>
+                                <option value="1188">Lifetime</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        🔢 Generate Batch
+                    </button>
+                </form>
+                <div id="batchResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.27/jsrsasign-all-min.js"></script>
+    <script>
+        const LICENSE_SECRET = 'CA-OFFICE-LICENSE-SECRET-KEY-2024';
+        let currentLicenseData = null;
+        let generatedLicenses = JSON.parse(localStorage.getItem('licenses') || '[]');
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            if (tabName === 'batch') {
+                updateStats();
+            }
+        }
+
+        function updateDuration() {
+            const duration = document.getElementById('duration').value;
+            const users = document.getElementById('maxUsers');
+            
+            if (duration === '1') users.value = 3;
+            else if (duration === '12') users.value = 5;
+            else if (duration === '36') users.value = 10;
+            else if (duration === '60') users.value = 15;
+            else users.value = 999;
+        }
+
+        function quickGenerate(type) {
+            const typeMap = {
+                'trial': { duration: '1', users: 3 },
+                '1year': { duration: '12', users: 5 },
+                '3year': { duration: '36', users: 10 },
+                'lifetime': { duration: '1188', users: 999 }
+            };
+            
+            document.getElementById('duration').value = typeMap[type].duration;
+            document.getElementById('maxUsers').value = typeMap[type].users;
+            
+            if (!document.getElementById('companyName').value) {
+                document.getElementById('companyName').value = 'Demo Company';
+            }
+            if (!document.getElementById('email').value) {
+                document.getElementById('email').value = 'demo@company.com';
+            }
+        }
+
+        function generateLicense(event) {
+            event.preventDefault();
+            
+            const company = document.getElementById('companyName').value;
+            const email = document.getElementById('email').value;
+            const durationMonths = parseInt(document.getElementById('duration').value);
+            const maxUsers = parseInt(document.getElementById('maxUsers').value);
+            
+            const issueDate = new Date();
+            const expiryDate = new Date();
+            expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
+            
+            const payload = {
+                company: company,
+                email: email,
+                expiry: expiryDate.toISOString(),
+                users: maxUsers,
+                issued: issueDate.toISOString(),
+                type: 'commercial'
+            };
+            
+            const header = { alg: 'HS256', typ: 'JWT' };
+            const sHeader = JSON.stringify(header);
+            const sPayload = JSON.stringify(payload);
+            const licenseKey = KJUR.jws.JWS.sign('HS256', sHeader, sPayload, LICENSE_SECRET);
+            
+            currentLicenseData = { ...payload, licenseKey };
+            
+            document.getElementById('licenseKeyText').textContent = licenseKey;
+            document.getElementById('infoCompany').textContent = company;
+            document.getElementById('infoEmail').textContent = email;
+            document.getElementById('infoUsers').textContent = maxUsers;
+            document.getElementById('infoExpiry').textContent = expiryDate.toLocaleDateString();
+            document.getElementById('result').classList.add('show');
+            
+            // Save to history
+            generatedLicenses.unshift({
+                ...payload,
+                licenseKey,
+                timestamp: new Date().toISOString()
+            });
+            if (generatedLicenses.length > 100) generatedLicenses = generatedLicenses.slice(0, 100);
+            localStorage.setItem('licenses', JSON.stringify(generatedLicenses));
+            
+            // Scroll to result
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function verifyLicense(event) {
+            event.preventDefault();
+            
+            const licenseKey = document.getElementById('verifyKey').value.trim();
+            const resultDiv = document.getElementById('verifyResult');
+            
+            try {
+                const isValid = KJUR.jws.JWS.verify(licenseKey, LICENSE_SECRET, ['HS256']);
+                
+                if (isValid) {
+                    const payload = KJUR.jws.JWS.parse(licenseKey).payloadObj;
+                    const expiryDate = new Date(payload.expiry);
+                    const now = new Date();
+                    const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                    
+                    resultDiv.innerHTML = `
+                        <div class="result-box show">
+                            <div class="alert alert-success">
+                                <h3 style="margin-bottom: 12px;">✅ Valid License</h3>
+                            </div>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">Company</div>
+                                    <div class="info-value">${payload.company}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Email</div>
+                                    <div class="info-value">${payload.email}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Max Users</div>
+                                    <div class="info-value">${payload.users}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Days Remaining</div>
+                                    <div class="info-value">${daysRemaining > 0 ? daysRemaining : 'EXPIRED'}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Issued</div>
+                                    <div class="info-value">${new Date(payload.issued).toLocaleDateString()}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Expires</div>
+                                    <div class="info-value">${expiryDate.toLocaleDateString()}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result-box show">
+                            <div class="alert alert-danger">
+                                <h3>❌ Invalid License</h3>
+                                <p>The license key is invalid or corrupted.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result-box show">
+                        <div class="alert alert-danger">
+                            <h3>❌ Verification Failed</h3>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function batchGenerate(event) {
+            event.preventDefault();
+            
+            const count = parseInt(document.getElementById('batchCount').value);
+            const type = parseInt(document.getElementById('batchType').value);
+            
+            let csvContent = 'Company,Email,License Key,Expiry Date,Max Users\n';
+            
+            for (let i = 1; i <= count; i++) {
+                const company = `Company ${i}`;
+                const email = `user${i}@company.com`;
+                const issueDate = new Date();
+                const expiryDate = new Date();
+                expiryDate.setMonth(expiryDate.getMonth() + type);
+                
+                const payload = {
+                    company,
+                    email,
+                    expiry: expiryDate.toISOString(),
+                    users: type === 1 ? 3 : type === 12 ? 5 : type === 36 ? 10 : type === 60 ? 15 : 999,
+                    issued: issueDate.toISOString(),
+                    type: 'commercial'
+                };
+                
+                const header = { alg: 'HS256', typ: 'JWT' };
+                const sHeader = JSON.stringify(header);
+                const sPayload = JSON.stringify(payload);
+                const licenseKey = KJUR.jws.JWS.sign('HS256', sHeader, sPayload, LICENSE_SECRET);
+                
+                csvContent += `"${company}","${email}","${licenseKey}","${expiryDate.toLocaleDateString()}",${payload.users}\n`;
+            }
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `licenses_batch_${Date.now()}.csv`;
+            a.click();
+            
+            document.getElementById('batchResult').innerHTML = `
+                <div class="result-box show">
+                    <div class="alert alert-success">
+                        <h3>✅ ${count} Licenses Generated!</h3>
+                        <p>CSV file downloaded successfully.</p>
+                    </div>
+                </div>
+            `;
+            
+            updateStats();
+        }
+
+        function copyLicense() {
+            const text = document.getElementById('licenseKeyText').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function downloadLicense() {
+            if (!currentLicenseData) return;
+            
+            const content = `CA OFFICE PRO - LICENSE KEY
+====================================
+
+Company: ${currentLicenseData.company}
+Email: ${currentLicenseData.email}
+Max Users: ${currentLicenseData.users}
+Issued: ${new Date(currentLicenseData.issued).toLocaleDateString()}
+Expires: ${new Date(currentLicenseData.expiry).toLocaleDateString()}
+
+LICENSE KEY:
+${currentLicenseData.licenseKey}
+
+====================================
+Generated: ${new Date().toLocaleString()}
+`;
+            
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `license_${currentLicenseData.company.replace(/\s+/g, '_')}.txt`;
+            a.click();
+        }
+
+        function emailLicense() {
+            if (!currentLicenseData) return;
+            
+            const subject = encodeURIComponent('Your CA Office Pro License Key');
+            const body = encodeURIComponent(`Dear ${currentLicenseData.company},
+
+Your CA Office Pro license has been generated successfully.
+
+License Details:
+- Company: ${currentLicenseData.company}
+- Max Users: ${currentLicenseData.users}
+- Valid Until: ${new Date(currentLicenseData.expiry).toLocaleDateString()}
+
+LICENSE KEY:
+${currentLicenseData.licenseKey}
+
+To activate:
+1. Open CA Office Pro application
+2. Click "Activate License"
+3. Paste the license key above
+4. Enter your company details
+5. Click Activate
+
+For support, contact: support@caoffice.com
+
+Best regards,
+CA Office Pro Team`);
+            
+            window.open(`mailto:${currentLicenseData.email}?subject=${subject}&body=${body}`);
+        }
+
+        function updateStats() {
+            const today = new Date().toDateString();
+            const todayCount = generatedLicenses.filter(l => 
+                new Date(l.timestamp).toDateString() === today
+            ).length;
+            
+            document.getElementById('totalGenerated').textContent = generatedLicenses.length;
+            document.getElementById('todayGenerated').textContent = todayCount;
+        }
+
+        // Initialize
+        updateStats();
+    </script>
+</body>
+</html>
