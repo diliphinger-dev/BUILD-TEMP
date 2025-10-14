@@ -131,10 +131,10 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
         'overview' as category,
         (SELECT COUNT(*) FROM staff WHERE status = 'active') as active_staff,
         (SELECT COUNT(*) FROM clients WHERE status = 'active') as active_clients,
-        (SELECT COUNT(*) FROM tasks WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_tasks,
-        (SELECT COUNT(*) FROM invoices WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_invoices,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as monthly_revenue,
-        (SELECT COUNT(*) FROM audit_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)) as daily_activities
+        (SELECT COUNT(*) FROM tasks WHERE created_at >= DATE_SUB(DATETIME('now'), INTERVAL 30 DAY)) as monthly_tasks,
+        (SELECT COUNT(*) FROM invoices WHERE created_at >= DATE_SUB(DATETIME('now'), INTERVAL 30 DAY)) as monthly_invoices,
+        (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE created_at >= DATE_SUB(DATETIME('now'), INTERVAL 30 DAY)) as monthly_revenue,
+        (SELECT COUNT(*) FROM audit_logs WHERE created_at >= DATE_SUB(DATETIME('now'), INTERVAL 24 HOUR)) as daily_activities
     `);
     const recentActivities = await query(`
       SELECT al.action, al.entity_type, al.entity_id, al.created_at, s.name as user_name,
@@ -152,17 +152,17 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     const systemHealth = await query(`
       SELECT
         'health' as category,
-        (SELECT COUNT(*) FROM invoices WHERE status != 'paid' AND due_date < CURDATE()) as overdue_invoices,
-        (SELECT COUNT(*) FROM tasks WHERE status = 'pending' AND due_date < CURDATE()) as overdue_tasks,
-        (SELECT COUNT(*) FROM audit_logs WHERE action = 'LOGIN_FAILED' AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)) as failed_logins_today,
-        (SELECT COUNT(DISTINCT staff_id) FROM attendance WHERE attendance_date = CURDATE() AND status = 'absent') as absent_today
+        (SELECT COUNT(*) FROM invoices WHERE status != 'paid' AND due_date < DATE('now')) as overdue_invoices,
+        (SELECT COUNT(*) FROM tasks WHERE status = 'pending' AND due_date < DATE('now')) as overdue_tasks,
+        (SELECT COUNT(*) FROM audit_logs WHERE action = 'LOGIN_FAILED' AND created_at >= DATE_SUB(DATETIME('now'), INTERVAL 24 HOUR)) as failed_logins_today,
+        (SELECT COUNT(DISTINCT staff_id) FROM attendance WHERE attendance_date = DATE('now') AND status = 'absent') as absent_today
     `);
     const performanceStats = await query(`
       SELECT
         AVG(CASE WHEN t.status = 'completed' THEN DATEDIFF(t.completion_date, t.created_at) END) as avg_task_completion_days,
         AVG(CASE WHEN i.status = 'paid' THEN DATEDIFF(i.paid_date, i.invoice_date) END) as avg_payment_days,
-        (SELECT COUNT(*) FROM tasks WHERE status = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as tasks_completed_monthly,
-        (SELECT AVG(total_hours) FROM attendance WHERE attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND total_hours > 0) as avg_work_hours_daily
+        (SELECT COUNT(*) FROM tasks WHERE status = 'completed' AND created_at >= DATE_SUB(DATETIME('now'), INTERVAL 30 DAY)) as tasks_completed_monthly,
+        (SELECT AVG(total_hours) FROM attendance WHERE attendance_date >= DATE_SUB(DATE('now'), INTERVAL 30 DAY) AND total_hours > 0) as avg_work_hours_daily
       FROM tasks t
       LEFT JOIN invoices i ON 1=1
     `);
@@ -383,7 +383,7 @@ router.get('/security-alerts', requireAdmin, async (req, res) => {
       SELECT al.ip_address, s.email, COUNT(*) as attempt_count, MAX(al.created_at) as last_attempt
       FROM audit_logs al
       LEFT JOIN staff s ON al.user_id = s.id
-      WHERE al.action = 'LOGIN_FAILED' AND al.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      WHERE al.action = 'LOGIN_FAILED' AND al.created_at >= DATE_SUB(DATETIME('now'), INTERVAL 24 HOUR)
       GROUP BY al.ip_address, s.email
       HAVING attempt_count >= 3
       ORDER BY attempt_count DESC
@@ -402,7 +402,7 @@ router.get('/security-alerts', requireAdmin, async (req, res) => {
       FROM audit_logs al
       LEFT JOIN staff s ON al.user_id = s.id
       WHERE (HOUR(al.created_at) < 6 OR HOUR(al.created_at) > 22)
-        AND DATE(al.created_at) = CURDATE()
+        AND DATE(al.created_at) = DATE('now')
         AND al.action IN ('CREATE','UPDATE','DELETE')
       GROUP BY al.user_id, s.name
       HAVING activity_count >= 5
@@ -420,7 +420,7 @@ router.get('/security-alerts', requireAdmin, async (req, res) => {
       SELECT al.user_id, s.name as user_name, COUNT(*) as deletion_count, MAX(al.created_at) as last_deletion
       FROM audit_logs al
       LEFT JOIN staff s ON al.user_id = s.id
-      WHERE al.action = 'DELETE' AND al.created_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)
+      WHERE al.action = 'DELETE' AND al.created_at >= DATE_SUB(DATETIME('now'), INTERVAL 2 HOUR)
       GROUP BY al.user_id, s.name
       HAVING deletion_count >= 3
     `);
@@ -435,7 +435,7 @@ router.get('/security-alerts', requireAdmin, async (req, res) => {
     // Business health alert
     const overdue = await query(`
       SELECT COUNT(*) as count FROM invoices
-      WHERE status != 'paid' AND due_date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      WHERE status != 'paid' AND due_date < DATE_SUB(DATE('now'), INTERVAL 30 DAY)
     `);
     if (overdue[0].count > 5) {
       alerts.push({
@@ -479,7 +479,7 @@ router.post('/maintenance/cleanup', requireAdmin, async (req, res) => {
     if (cleanup_audit_logs_older_than_days > 0) {
       const r = await query(`
         DELETE FROM audit_logs
-        WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+        WHERE created_at < DATE_SUB(DATETIME('now'), INTERVAL ? DAY)
           AND action NOT IN ('LOGIN_FAILED','DELETE','SYSTEM_ERROR')
       `, [cleanup_audit_logs_older_than_days]);
       summary.audit_logs_deleted = r.affectedRows;
@@ -488,7 +488,7 @@ router.post('/maintenance/cleanup', requireAdmin, async (req, res) => {
       const r = await query(`
         UPDATE tasks SET status='archived'
         WHERE status='completed'
-          AND completion_date < DATE_SUB(NOW(), INTERVAL ? DAY)
+          AND completion_date < DATE_SUB(DATETIME('now'), INTERVAL ? DAY)
       `, [cleanup_completed_tasks_older_than_days]);
       summary.completed_tasks_archived = r.affectedRows;
     }
@@ -541,8 +541,8 @@ router.put('/settings/:key', requireAdmin, async (req, res) => {
     const current = await query('SELECT * FROM settings WHERE setting_key = ?', [key]);
     await query(`
       INSERT INTO settings (setting_key, setting_value, updated_at)
-      VALUES (?, ?, NOW())
-      ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()
+      VALUES (?, ?, DATETIME('now'))
+      ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = DATETIME('now')
     `, [key, value, value]);
     if (req.auditLogger) {
       await req.auditLogger('UPDATE','setting', key,
@@ -634,7 +634,7 @@ router.put('/task-types/:id', requireAdmin, async (req, res) => {
 
     await query(`
       UPDATE task_types 
-      SET display_label = ?, icon = ?, color = ?, description = ?, updated_at = NOW()
+      SET display_label = ?, icon = ?, color = ?, description = ?, updated_at = DATETIME('now')
       WHERE id = ?
     `, [display_label, icon, color, description, id]);
 

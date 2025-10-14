@@ -38,40 +38,30 @@ function LicenseActivation() {
     }
 
     setLoading(true);
-  try {
-    console.log('Sending activation request...');
-    const res = await axios.post('/api/license/activate', {
-      licenseKey: licenseKey.trim(),
-      companyName,
-      email
-    });
+    try {
+      console.log('Sending activation request...');
+      const res = await axios.post('/api/license/activate', {
+        licenseKey: licenseKey.trim(),
+        companyName,
+        email
+      });
 
-    console.log('Activation response:', res.data);
+      console.log('Activation response:', res.data);
 
       if (res.data.success) {
         alert('License activated successfully!\n\nPlease restart the application.');
         setShowDialog(false);
         checkStatus();
       }
-   } catch (err) {
-    console.error('Activation error:', err);
-    const errorMsg = err.response?.data?.message || err.message || 'Activation failed';
-    alert('License Activation Failed:\n\n' + errorMsg);
-  }
-  setLoading(false);
-};
-
-  const generateTrial = async () => {
-    try {
-      const res = await axios.post('/api/license/generate-trial');
-      if (res.data.success) {
-        setLicenseKey(res.data.licenseKey);
-        alert('30-day trial license generated!');
-      }
     } catch (err) {
-      alert('Failed to generate trial license');
+      console.error('Activation error:', err);
+      const errorMsg = err.response?.data?.message || err.message || 'Activation failed';
+      alert('License Activation Failed:\n\n' + errorMsg);
     }
+    setLoading(false);
   };
+
+  // REMOVED: generateTrial function - No more trial generation capability
 
   if (!status) return null;
 
@@ -182,7 +172,7 @@ function LicenseActivation() {
                 border: '1px solid #ffc107'
               }}>
                 <strong>⚠️ No Active License</strong><br/>
-                Please activate to continue using CA Office Pro
+                Please enter a valid license key to activate CA Office Pro
               </div>
             )}
 
@@ -242,6 +232,7 @@ function LicenseActivation() {
               />
             </div>
 
+            {/* FIXED: Removed trial generation button */}
             <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
               <button
                 onClick={activate}
@@ -260,25 +251,6 @@ function LicenseActivation() {
               >
                 {loading ? 'Activating...' : 'Activate License'}
               </button>
-
-              {!status.activated && (
-                <button
-                  onClick={generateTrial}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    background: '#2196F3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '14px'
-                  }}
-                >
-                  30-Day Trial
-                </button>
-              )}
             </div>
 
             {status.activated && (
@@ -305,9 +277,10 @@ function LicenseActivation() {
               borderRadius: '5px',
               fontSize: '12px'
             }}>
-              <strong>Don't have a license?</strong><br/>
+              <strong>Need a license?</strong><br/>
               Contact: support@caoffice.com<br/>
-              Phone: +91-XXXXXXXXXX
+              Phone: +91-XXXXXXXXXX<br/>
+              <strong>Note:</strong> Trial licenses are no longer available. Please contact support for a commercial license.
             </div>
           </div>
         </div>

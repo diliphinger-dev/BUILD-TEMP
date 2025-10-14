@@ -13,7 +13,7 @@ router.get('/stats', async (req, res) => {
         SELECT 
           (SELECT COUNT(*) FROM clients WHERE status = 'active') as total_clients,
           (SELECT COUNT(*) FROM staff WHERE status = 'active') as total_staff,
-          (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE status = 'paid' AND MONTH(paid_date) = MONTH(CURDATE())) as monthly_revenue
+          (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE status = 'paid' AND strftime('%m', paid_date) = strftime('%m', DATE('now'))) as monthly_revenue
       `;
 
       // Role-based task counting
@@ -68,7 +68,7 @@ router.get('/recent-activities', async (req, res) => {
         SELECT 'task' as type, t.title as title, c.name as client_name, t.created_at as date, t.status
         FROM tasks t 
         LEFT JOIN clients c ON t.client_id = c.id 
-        WHERE t.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        WHERE t.created_at >= DATE('now', '-7 days')
       `;
 
       // Filter activities based on user role
@@ -129,8 +129,8 @@ router.put('/settings', async (req, res) => {
     const { dashboard_name } = req.body;
     
     await query(
-      'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
-      ['dashboard_name', dashboard_name, dashboard_name]
+      'INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
+      ['dashboard_name', dashboard_name]
     );
     
     res.json({ success: true, message: 'Dashboard name updated successfully' });

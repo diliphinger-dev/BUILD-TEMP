@@ -349,10 +349,38 @@ const FirmManagement = () => {
         )}
       </div>
 
-      {/* Enhanced Modal for Add/Edit */}
+      {/* FIXED: Modal with proper z-index and no transparency issues */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            backdropFilter: 'none'
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              maxWidth: '700px',
+              width: '90vw',
+              maxHeight: '90vh',
+              overflow: 'hidden',
+              position: 'relative',
+              border: '1px solid #e0e0e0'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <FirmForm
               firm={editingFirm}
               onSuccess={() => {
@@ -426,29 +454,59 @@ const FirmForm = ({ firm, onSuccess }) => {
   };
 
   return (
-    <div style={{ maxWidth: '700px', width: '90vw' }}>
-      <div className="modal-header">
-        <h3 className="modal-title">
-          <i className="fas fa-building" style={{ marginRight: '8px' }}></i>
+    <div style={{ width: '100%' }}>
+      {/* Modal Header */}
+      <div style={{
+        padding: '20px 30px',
+        borderBottom: '1px solid #e0e0e0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa'
+      }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#333' }}>
+          <i className="fas fa-building" style={{ marginRight: '8px', color: '#3498db' }}></i>
           {firm ? 'Edit Firm' : 'Add New Firm'}
         </h3>
-        <button className="btn btn-sm btn-outline" onClick={onSuccess}>
+        <button 
+          onClick={onSuccess}
+          style={{
+            background: 'none',
+            border: 'none',
+            fontSize: '20px',
+            cursor: 'pointer',
+            padding: '5px',
+            color: '#666',
+            borderRadius: '50%',
+            width: '30px',
+            height: '30px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
           <i className="fas fa-times"></i>
         </button>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="modal-body" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+        {/* Modal Body */}
+        <div style={{ 
+          padding: '30px', 
+          maxHeight: '500px', 
+          overflowY: 'auto',
+          backgroundColor: '#ffffff'
+        }}>
           {/* Basic Information */}
           <div style={{ marginBottom: '24px' }}>
-            <h5 style={{ marginBottom: '16px', color: 'var(--secondary-color)' }}>
+            <h5 style={{ marginBottom: '16px', color: '#3498db', fontSize: '16px', fontWeight: '600' }}>
               <i className="fas fa-info-circle" style={{ marginRight: '8px' }}></i>
               Basic Information
             </h5>
             <div className="row">
               <div className="col-6">
                 <div className="form-group">
-                  <label className="form-label">Firm Name *</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Firm Name *</label>
                   <input
                     type="text"
                     name="firm_name"
@@ -457,12 +515,17 @@ const FirmForm = ({ firm, onSuccess }) => {
                     onChange={handleChange}
                     required
                     placeholder="Enter firm name"
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-6">
                 <div className="form-group">
-                  <label className="form-label">Firm Code *</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Firm Code *</label>
                   <input
                     type="text"
                     name="firm_code"
@@ -472,6 +535,12 @@ const FirmForm = ({ firm, onSuccess }) => {
                     required
                     disabled={!!firm}
                     placeholder="e.g., FIRM001"
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      backgroundColor: firm ? '#f5f5f5' : '#fff'
+                    }}
                   />
                 </div>
               </div>
@@ -480,12 +549,12 @@ const FirmForm = ({ firm, onSuccess }) => {
 
           {/* Address Information */}
           <div style={{ marginBottom: '24px' }}>
-            <h5 style={{ marginBottom: '16px', color: 'var(--secondary-color)' }}>
+            <h5 style={{ marginBottom: '16px', color: '#3498db', fontSize: '16px', fontWeight: '600' }}>
               <i className="fas fa-map-marker-alt" style={{ marginRight: '8px' }}></i>
               Address Information
             </h5>
             <div className="form-group">
-              <label className="form-label">Address</label>
+              <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Address</label>
               <textarea
                 name="firm_address"
                 className="form-control"
@@ -493,43 +562,63 @@ const FirmForm = ({ firm, onSuccess }) => {
                 value={formData.firm_address}
                 onChange={handleChange}
                 placeholder="Complete address"
+                style={{ 
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  padding: '10px 12px'
+                }}
               ></textarea>
             </div>
 
             <div className="row">
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">City</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>City</label>
                   <input
                     type="text"
                     name="firm_city"
                     className="form-control"
                     value={formData.firm_city}
                     onChange={handleChange}
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">State</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>State</label>
                   <input
                     type="text"
                     name="firm_state"
                     className="form-control"
                     value={formData.firm_state}
                     onChange={handleChange}
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">Pincode</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Pincode</label>
                   <input
                     type="text"
                     name="firm_pincode"
                     className="form-control"
                     value={formData.firm_pincode}
                     onChange={handleChange}
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
@@ -538,32 +627,42 @@ const FirmForm = ({ firm, onSuccess }) => {
 
           {/* Contact Information */}
           <div style={{ marginBottom: '24px' }}>
-            <h5 style={{ marginBottom: '16px', color: 'var(--secondary-color)' }}>
+            <h5 style={{ marginBottom: '16px', color: '#3498db', fontSize: '16px', fontWeight: '600' }}>
               <i className="fas fa-phone" style={{ marginRight: '8px' }}></i>
               Contact Information
             </h5>
             <div className="row">
               <div className="col-6">
                 <div className="form-group">
-                  <label className="form-label">Phone</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Phone</label>
                   <input
                     type="text"
                     name="firm_phone"
                     className="form-control"
                     value={formData.firm_phone}
                     onChange={handleChange}
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-6">
                 <div className="form-group">
-                  <label className="form-label">Email</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Email</label>
                   <input
                     type="email"
                     name="firm_email"
                     className="form-control"
                     value={formData.firm_email}
                     onChange={handleChange}
+                    style={{ 
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
@@ -572,47 +671,62 @@ const FirmForm = ({ firm, onSuccess }) => {
 
           {/* Legal Information */}
           <div style={{ marginBottom: '24px' }}>
-            <h5 style={{ marginBottom: '16px', color: 'var(--secondary-color)' }}>
+            <h5 style={{ marginBottom: '16px', color: '#3498db', fontSize: '16px', fontWeight: '600' }}>
               <i className="fas fa-file-alt" style={{ marginRight: '8px' }}></i>
               Legal Information
             </h5>
             <div className="row">
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">PAN Number</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>PAN Number</label>
                   <input
                     type="text"
                     name="firm_pan"
                     className="form-control"
                     value={formData.firm_pan}
                     onChange={handleChange}
-                    style={{ textTransform: 'uppercase' }}
+                    style={{ 
+                      textTransform: 'uppercase',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">GSTIN</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>GSTIN</label>
                   <input
                     type="text"
                     name="firm_gstin"
                     className="form-control"
                     value={formData.firm_gstin}
                     onChange={handleChange}
-                    style={{ textTransform: 'uppercase' }}
+                    style={{ 
+                      textTransform: 'uppercase',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
               <div className="col-4">
                 <div className="form-group">
-                  <label className="form-label">TAN</label>
+                  <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>TAN</label>
                   <input
                     type="text"
                     name="firm_tan"
                     className="form-control"
                     value={formData.firm_tan}
                     onChange={handleChange}
-                    style={{ textTransform: 'uppercase' }}
+                    style={{ 
+                      textTransform: 'uppercase',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      padding: '10px 12px'
+                    }}
                   />
                 </div>
               </div>
@@ -622,12 +736,17 @@ const FirmForm = ({ firm, onSuccess }) => {
           {/* Status */}
           {firm && (
             <div className="form-group">
-              <label className="form-label">Status</label>
+              <label className="form-label" style={{ fontWeight: '500', color: '#333' }}>Status</label>
               <select
                 name="status"
                 className="form-control form-select"
                 value={formData.status}
                 onChange={handleChange}
+                style={{ 
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  padding: '10px 12px'
+                }}
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -636,11 +755,44 @@ const FirmForm = ({ firm, onSuccess }) => {
           )}
         </div>
 
-        <div className="modal-footer">
-          <button type="button" className="btn btn-outline" onClick={onSuccess}>
+        {/* Modal Footer */}
+        <div style={{
+          padding: '20px 30px',
+          borderTop: '1px solid #e0e0e0',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '12px',
+          backgroundColor: '#f8f9fa'
+        }}>
+          <button 
+            type="button" 
+            onClick={onSuccess}
+            style={{
+              padding: '10px 20px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              backgroundColor: '#fff',
+              color: '#666',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '6px',
+              backgroundColor: '#3498db',
+              color: '#fff',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: '500',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
             {loading ? 'Saving...' : (firm ? 'Update Firm' : 'Add Firm')}
           </button>
         </div>

@@ -235,7 +235,7 @@ app.use('/api/admin', healthCheck, adminRoutes);
 app.use('/api/reports', healthCheck, reportsRoutes);
 app.use('/api/attendance', healthCheck, attendanceRoutes);
 app.use('/api/license', licenseRoutes);
-app.use('/api/firms', firmsRoutes);
+app.use('/api/firms', healthCheck, firmsRoutes);
 
 // Conditionally add notifications route if it exists
 if (notificationsRoutes && notificationsRoutes) {

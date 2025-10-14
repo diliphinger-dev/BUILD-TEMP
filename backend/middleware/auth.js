@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 
 // Enhanced JWT secret for better security
-const JWT_SECRET = process.env.JWT_SECRET || 'CA-Office-2024-Super-Secret-Key-Dilip-Production-Ready';
+const JWT_SECRET = process.env.JWT_SECRET || 'enhanced-ca-office-secret-key';
 
 // Middleware to require authentication
 const requireAuth = async (req, res, next) => {

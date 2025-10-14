@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
-const { generateLicenseKey, verifyLicenseKey, generateTrialLicense } = require('../utils/licenseGenerator');
+const { generateLicenseKey, verifyLicenseKey } = require('../utils/licenseGenerator');
 const { requireAdmin } = require('../middleware/auth');
 
 router.post('/activate', async (req, res) => {
@@ -17,19 +17,19 @@ router.post('/activate', async (req, res) => {
     console.log('License Key Preview:', licenseKey?.substring(0, 50) + '...');
     
     if (!licenseKey) {
-      console.log('❌ ERROR: No license key provided');
+      console.log('⌧ ERROR: No license key provided');
       return res.status(400).json({
         success: false,
         message: 'License key is required'
       });
     }
     
-    console.log('→ Verifying license key...');
+    console.log('⇄ Verifying license key...');
     const verification = verifyLicenseKey(licenseKey);
-    console.log('→ Verification result:', verification.valid ? '✓ VALID' : '✗ INVALID');
+    console.log('⇄ Verification result:', verification.valid ? '✓ VALID' : '✗ INVALID');
     
     if (!verification.valid) {
-      console.log('❌ Verification failed:', verification.reason);
+      console.log('⌧ Verification failed:', verification.reason);
       console.log('Verification details:', JSON.stringify(verification, null, 2));
       return res.status(400).json({
         success: false,
@@ -40,7 +40,7 @@ router.post('/activate', async (req, res) => {
     console.log('✓ License data:', JSON.stringify(verification.data, null, 2));
     
     // Deactivate existing active licenses
-    console.log('→ Deactivating old licenses...');
+    console.log('⇄ Deactivating old licenses...');
     await query('UPDATE licenses SET status = ? WHERE status = ?', ['expired', 'active']);
     console.log('✓ Old licenses deactivated');
     
@@ -49,15 +49,14 @@ router.post('/activate', async (req, res) => {
     const expiryDate = new Date(verification.data.expiry);
     const durationDays = Math.floor((expiryDate - issueDate) / (1000 * 60 * 60 * 24));
     
-    let licenseType = 'trial';
-    if (durationDays <= 31) licenseType = 'trial';
-    else if (durationDays <= 400) licenseType = '1year';
+    let licenseType = 'commercial';
+    if (durationDays <= 400) licenseType = '1year';
     else if (durationDays <= 1200) licenseType = '3year';
     else if (durationDays <= 2000) licenseType = '5year';
     else licenseType = 'lifetime';
     
-    console.log('→ License type determined:', licenseType);
-    console.log('→ Duration days:', durationDays);
+    console.log('⇄ License type determined:', licenseType);
+    console.log('⇄ Duration days:', durationDays);
     
     // Extract dates properly
     const issueDateStr = verification.data.issued.includes('T') 
@@ -67,11 +66,11 @@ router.post('/activate', async (req, res) => {
       ? verification.data.expiry.split('T')[0] 
       : verification.data.expiry;
     
-    console.log('→ Issue date:', issueDateStr);
-    console.log('→ Expiry date:', expiryDateStr);
+    console.log('⇄ Issue date:', issueDateStr);
+    console.log('⇄ Expiry date:', expiryDateStr);
     
     // Insert new license
-    console.log('→ Inserting new license...');
+    console.log('⇄ Inserting new license...');
     const insertQuery = `INSERT INTO licenses 
        (license_key, company_name, email, issue_date, expiry_date, status, max_users, license_type, features) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -88,7 +87,7 @@ router.post('/activate', async (req, res) => {
       JSON.stringify(verification.data.features || {})
     ];
     
-    console.log('→ Insert params:', JSON.stringify(insertParams.map((p, i) => 
+    console.log('⇄ Insert params:', JSON.stringify(insertParams.map((p, i) => 
       i === 0 ? p.substring(0, 20) + '...' : p
     ), null, 2));
     
@@ -108,7 +107,7 @@ router.post('/activate', async (req, res) => {
     });
   } catch (error) {
     console.error('========================================');
-    console.error('❌ LICENSE ACTIVATION ERROR');
+    console.error('⌧ LICENSE ACTIVATION ERROR');
     console.error('========================================');
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
@@ -204,26 +203,7 @@ router.post('/generate', requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/generate-trial', async (req, res) => {
-  try {
-    const trialLicense = generateTrialLicense(30);
-    
-    res.json({
-      success: true,
-      licenseKey: trialLicense,
-      type: 'trial',
-      duration: '30 days',
-      maxUsers: 3,
-      message: 'Trial license generated successfully'
-    });
-  } catch (error) {
-    console.error('Trial license generation error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Trial license generation failed: ' + error.message
-    });
-  }
-});
+// REMOVED: /generate-trial endpoint - No more trial license generation
 
 router.delete('/deactivate', requireAdmin, async (req, res) => {
   try {
@@ -238,6 +218,86 @@ router.delete('/deactivate', requireAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'License deactivation failed: ' + error.message
+    });
+  }
+});
+
+// Additional route for license information
+router.get('/info', async (req, res) => {
+  try {
+    const licenses = await query(
+      'SELECT * FROM licenses WHERE status = ? ORDER BY id DESC LIMIT 1',
+      ['active']
+    );
+    
+    if (licenses.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No active license found'
+      });
+    }
+    
+    const license = licenses[0];
+    const verification = verifyLicenseKey(license.license_key);
+    
+    if (!verification.valid) {
+      return res.json({
+        success: false,
+        message: 'License verification failed',
+        reason: verification.reason
+      });
+    }
+    
+    res.json({
+      success: true,
+      license: {
+        id: license.id,
+        company: license.company_name,
+        email: license.email,
+        licenseType: license.license_type,
+        issueDate: license.issue_date,
+        expiryDate: license.expiry_date,
+        maxUsers: license.max_users,
+        features: JSON.parse(license.features || '{}'),
+        daysRemaining: verification.daysRemaining,
+        isExpiringSoon: verification.isExpiringSoon
+      }
+    });
+  } catch (error) {
+    console.error('License info error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get license information: ' + error.message
+    });
+  }
+});
+
+// Route for license validation (internal use)
+router.post('/validate', async (req, res) => {
+  try {
+    const { licenseKey } = req.body;
+    
+    if (!licenseKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'License key is required'
+      });
+    }
+    
+    const verification = verifyLicenseKey(licenseKey);
+    
+    res.json({
+      success: true,
+      valid: verification.valid,
+      reason: verification.reason,
+      data: verification.data,
+      daysRemaining: verification.daysRemaining
+    });
+  } catch (error) {
+    console.error('License validation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'License validation failed: ' + error.message
     });
   }
 });

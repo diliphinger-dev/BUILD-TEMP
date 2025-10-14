@@ -20,7 +20,7 @@ router.post('/login', async (req, res) => {
     // Try database first, fallback to demo mode
     try {
       const users = await query(
-        'SELECT * FROM staff WHERE email = ? AND status = "active"', 
+        'SELECT * FROM staff WHERE email = ? AND status = ?' 
         [email]
       );
       

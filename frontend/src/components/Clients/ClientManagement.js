@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
 
-// FIXED: Add the same auth token helper from StaffManagement.js
+// Helper function to get current firm ID
+const getCurrentFirmId = () => {
+  // Get the current firm from context, localStorage, or state
+  const currentFirm = JSON.parse(localStorage.getItem('currentFirm') || '{}');
+  return currentFirm.id || 1; // fallback to 1 if no firm selected
+};
+
+// Auth token helper function
 const getAuthToken = (appContext) => {
   // First try to get from AppContext if available
   if (appContext?.token) {
@@ -32,7 +39,7 @@ const ClientManagement = () => {
   const { openModal, closeModal } = appContext;
 
   useEffect(() => {
-    // FIXED: Check for authentication before fetching
+    // Check for authentication before fetching
     const token = getAuthToken(appContext);
     if (token) {
       fetchClients();
@@ -52,7 +59,7 @@ const ClientManagement = () => {
         return;
       }
 
-      // FIXED: Add authentication headers
+      // Add authentication headers
       const response = await fetch('/api/clients', {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -91,7 +98,7 @@ const ClientManagement = () => {
     if (window.confirm('Are you sure you want to delete this client?')) {
       try {
         const token = getAuthToken(appContext);
-        // FIXED: Add authentication headers
+        // Add authentication headers
         const response = await fetch(`/api/clients/${id}`, { 
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -125,7 +132,7 @@ const ClientManagement = () => {
     );
   }
 
-  // FIXED: Add authentication check like in StaffManagement.js
+  // Add authentication check
   const token = getAuthToken(appContext);
   if (!token) {
     return (
@@ -261,7 +268,7 @@ const ClientManagement = () => {
   );
 };
 
-// FIXED: Client Import Modal Component with authentication
+// Client Import Modal Component with firm_id
 const ClientImportModal = ({ onSuccess, appContext }) => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -309,11 +316,12 @@ const ClientImportModal = ({ onSuccess, appContext }) => {
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('firm_id', getCurrentFirmId()); // ADD firm_id to form data
     
     const token = getAuthToken(appContext);
 
     try {
-      // FIXED: Add authentication headers
+      // Add authentication headers
       const response = await fetch('/api/clients/import', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
@@ -438,7 +446,7 @@ Jane Smith,jane@example.com,9876543211,,individual,456 Oak Ave,Delhi,Delhi,11000
   );
 };
 
-// FIXED: Client Form Component with authentication
+// Client Form Component with firm_id
 const ClientForm = ({ client, onSuccess, appContext }) => {
   const [formData, setFormData] = useState({
     name: client?.name || '',
@@ -472,14 +480,20 @@ const ClientForm = ({ client, onSuccess, appContext }) => {
       const url = client ? `/api/clients/${client.id}` : '/api/clients';
       const method = client ? 'PUT' : 'POST';
 
-      // FIXED: Add authentication headers
+      // FIXED: Add firm_id to the request body
+      const requestBody = {
+        ...formData,
+        firm_id: getCurrentFirmId() // Include firm_id in the request
+      };
+
+      // Add authentication headers
       const response = await fetch(url, {
         method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(requestBody)
       });
 
       if (response.status === 401) {

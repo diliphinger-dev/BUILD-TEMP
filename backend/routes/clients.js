@@ -24,26 +24,21 @@ const upload = multer({
   }
 });
 
-// Get all clients (filtered by firm_id)
+// Get all clients (global - accessible by all firms)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { firm_id, status, search } = req.query;
+    const { status, search } = req.query;
     
-    let sql = 'SELECT c.*, f.firm_name FROM clients c LEFT JOIN firms f ON c.firm_id = f.id WHERE 1=1';
-    const params = [];
+    let sql = 'SELECT c.* FROM clients c WHERE 1=1';
+    let params = [];
     
-    if (firm_id) {
-      sql += ' AND c.firm_id = ?';
-      params.push(firm_id);
-    }
-    
+    // Filter by status if provided
     if (status) {
       sql += ' AND c.status = ?';
       params.push(status);
-    } else {
-      sql += ' AND c.status = "active"';
     }
     
+    // Search functionality
     if (search) {
       sql += ' AND (c.name LIKE ? OR c.email LIKE ? OR c.company LIKE ?)';
       const searchParam = `%${search}%`;
@@ -63,7 +58,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single client
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const clients = await query('SELECT c.*, f.firm_name FROM clients c LEFT JOIN firms f ON c.firm_id = f.id WHERE c.id = ?', [req.params.id]);
+    const clients = await query('SELECT * FROM clients WHERE id = ?', [req.params.id]);
     
     if (clients.length === 0) {
       return res.status(404).json({ success: false, message: 'Client not found' });
@@ -79,13 +74,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/import', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
-  }
-
-  const { firm_id } = req.body;
-  
-  if (!firm_id) {
-    fs.unlinkSync(req.file.path);
-    return res.status(400).json({ success: false, message: 'Firm ID is required' });
   }
 
   const filePath = req.file.path;
@@ -132,27 +120,31 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
     // Insert clients into database
     for (const client of clients) {
       try {
-        // Check if client already exists in this firm
-        const existing = await query(
-          'SELECT id FROM clients WHERE email = ? AND email != "" AND firm_id = ?', 
-          [client.email, firm_id]
-        );
-
-        if (existing.length === 0 || !client.email) {
-          await query(`
-            INSERT INTO clients (
-              firm_id, name, email, phone, company, address, city, state,
-              postal_code, pan_number, gstin, client_type, status, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            firm_id, client.name, client.email, client.phone, client.company,
-            client.address, client.city, client.state, client.postal_code,
-            client.pan_number, client.gstin, client.client_type, client.status, req.user.id
-          ]);
-          imported++;
-        } else {
-          errors.push(`Client with email ${client.email} already exists`);
+        // Check if client already exists (by email if provided)
+        if (client.email && client.email !== '') {
+          const existing = await query(
+            'SELECT id FROM clients WHERE email = ?',
+            [client.email]
+          );
+          
+          if (existing.length > 0) {
+            errors.push(`Client with email ${client.email} already exists`);
+            continue;
+          }
         }
+
+        // Insert new client (global, no firm_id)
+        await query(`
+          INSERT INTO clients (
+            name, email, phone, company, address, city, state,
+            postal_code, pan_number, gstin, client_type, status, created_by
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          client.name, client.email, client.phone, client.company,
+          client.address, client.city, client.state, client.postal_code,
+          client.pan_number, client.gstin, client.client_type, client.status, req.user.id
+        ]);
+        imported++;
       } catch (dbError) {
         errors.push(`Error importing ${client.name}: ${dbError.message}`);
       }
@@ -183,39 +175,39 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
   }
 });
 
-// Create new client
+// Create new client (global)
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
-      firm_id, name, email, phone, company, address, city, state,
+      name, email, phone, company, address, city, state,
       postal_code, pan_number, gstin, client_type, status
     } = req.body;
-
-    if (!firm_id) {
-      return res.status(400).json({ success: false, message: 'Firm ID is required' });
-    }
 
     if (!name) {
       return res.status(400).json({ success: false, message: 'Name is required' });
     }
 
-    // Check if email already exists in this firm (if provided)
-    if (email) {
-      const existing = await query('SELECT id FROM clients WHERE email = ? AND firm_id = ?', [email, firm_id]);
+    // Check if email already exists (if provided)
+    if (email && email !== '') {
+      const existing = await query('SELECT id FROM clients WHERE email = ?', [email]);
+      
       if (existing.length > 0) {
-        return res.status(400).json({ success: false, message: 'Client with this email already exists' });
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Client with this email already exists' 
+        });
       }
     }
 
     const result = await query(`
       INSERT INTO clients (
-        firm_id, name, email, phone, company, address, city, state,
+        name, email, phone, company, address, city, state,
         postal_code, pan_number, gstin, client_type, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      firm_id, name, email, phone, company, address, city, state,
-      postal_code, pan_number, gstin, client_type || 'individual',
-      status || 'active', req.user.id
+      name, email, phone, company, address, city, state, 
+      postal_code, pan_number, gstin, client_type || 'individual', 
+      status || 'active', req.user?.id || 1
     ]);
 
     res.json({
@@ -238,22 +230,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
       postal_code, pan_number, gstin, client_type, status
     } = req.body;
 
-    // Check if email exists for other clients in the same firm (if email is being updated)
-    if (email) {
-      const [currentClient] = await query('SELECT firm_id FROM clients WHERE id = ?', [req.params.id]);
+    // Check if email exists for other clients (if email is being updated)
+    if (email && email !== '') {
+      const existing = await query(
+        'SELECT id FROM clients WHERE email = ? AND id != ?',
+        [email, req.params.id]
+      );
       
-      if (currentClient) {
-        const existing = await query(
-          'SELECT id FROM clients WHERE email = ? AND id != ? AND firm_id = ?', 
-          [email, req.params.id, currentClient.firm_id]
-        );
-        
-        if (existing.length > 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Email already exists for another client'
-          });
-        }
+      if (existing.length > 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Email already exists for another client' 
+        });
       }
     }
 
@@ -261,7 +249,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       UPDATE clients SET
         name = ?, email = ?, phone = ?, company = ?, address = ?,
         city = ?, state = ?, postal_code = ?, pan_number = ?,
-        gstin = ?, client_type = ?, status = ?, updated_at = NOW()
+        gstin = ?, client_type = ?, status = ?, updated_at = DATETIME('now')
       WHERE id = ?
     `, [
       name, email, phone, company, address, city, state,

@@ -4,7 +4,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const { query } = require('../config/database');
 const { logAuditEvent } = require('../middleware/auditLogger');
-const { requireAuth, requireAdmin, authenticateToken } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 
 // Configure multer for bulk import
@@ -25,34 +25,6 @@ const upload = multer({
   }
 });
 
-// Auto-create task_history table
-const ensureTaskHistoryTable = async () => {
-  try {
-    await query(`
-      CREATE TABLE IF NOT EXISTS task_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        task_id INT NOT NULL,
-        action_type ENUM('created', 'assigned', 'reassigned', 'rescheduled', 'status_changed', 'updated') NOT NULL,
-        old_value TEXT,
-        new_value TEXT,
-        changed_by INT,
-        change_reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-        FOREIGN KEY (changed_by) REFERENCES staff(id) ON DELETE SET NULL,
-        INDEX idx_task_id (task_id),
-        INDEX idx_action_type (action_type),
-        INDEX idx_created_at (created_at)
-      )
-    `);
-    console.log('✅ Task history table verified/created');
-  } catch (error) {
-    console.log('Task history table check:', error.message);
-  }
-};
-
-ensureTaskHistoryTable();
-
 // ============================================================================
 // SPECIFIC ROUTES (MUST COME BEFORE PARAMETERIZED ROUTES)
 // ============================================================================
@@ -62,7 +34,7 @@ router.get('/test', (req, res) => {
   res.json({ success: true, message: 'Tasks route is working' });
 });
 
-// Task analytics endpoint
+// Task analytics endpoint - UPDATED for global clients
 router.get('/analytics', requireAuth, async (req, res) => {
   try {
     const { start_date, end_date, group_by = 'status', firm_id } = req.query;
@@ -70,13 +42,12 @@ router.get('/analytics', requireAuth, async (req, res) => {
     let sql = `
       SELECT 
         COUNT(*) as total_tasks,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
-        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-        SUM(CASE WHEN due_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdue_tasks,
-        AVG(CASE WHEN status = 'completed' THEN DATEDIFF(completion_date, created_at) END) as avg_completion_days,
+        SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_tasks,
+        SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending_tasks,
+        SUM(CASE WHEN status = "in_progress" THEN 1 ELSE 0 END) as in_progress_tasks,
+        SUM(CASE WHEN due_date < DATE('now') AND status != 'completed' THEN 1 ELSE 0 END) as overdue_tasks,
         SUM(amount) as total_value,
-        SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END) as completed_value
+        SUM(CASE WHEN status = "completed" THEN amount ELSE 0 END) as completed_value
       FROM tasks
       WHERE 1=1
     `;
@@ -100,6 +71,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
     
     const analytics = await query(sql, params);
     
+    // Type distribution
     let typeParams = [start_date || '2000-01-01', end_date || '2099-12-31'];
     let typeSql = `
       SELECT 
@@ -119,20 +91,21 @@ router.get('/analytics', requireAuth, async (req, res) => {
     
     const typeDistribution = await query(typeSql, typeParams);
     
+    // Client summary - UPDATED for global clients
     let clientParams = [];
     let clientSql = `
       SELECT 
         c.name as client_name,
         COUNT(t.id) as task_count,
         SUM(t.amount) as total_amount,
-        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_count
+        SUM(CASE WHEN t.status = "completed" THEN 1 ELSE 0 END) as completed_count
       FROM clients c
       LEFT JOIN tasks t ON c.id = t.client_id
       WHERE 1=1
     `;
     
     if (firm_id) {
-      clientSql += ' AND c.firm_id = ?';
+      clientSql += ' AND t.firm_id = ?';
       clientParams.push(firm_id);
     }
     
@@ -152,6 +125,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
       top_clients: clientSummary
     });
   } catch (error) {
+    console.error('Error in analytics:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -172,7 +146,7 @@ router.get('/ready-for-billing', requireAuth, async (req, res) => {
         c.company as client_company
       FROM tasks t
       LEFT JOIN clients c ON t.client_id = c.id
-      WHERE t.status = 'completed' 
+      WHERE t.status = "completed" 
         AND COALESCE(t.amount, 0) > 0
         AND t.id NOT IN (
           SELECT COALESCE(task_id, 0) 
@@ -207,8 +181,8 @@ router.get('/ready-for-billing', requireAuth, async (req, res) => {
   }
 });
 
-// Batch update tasks
-router.put('/batch-update', requireAuth, requireAdmin, async (req, res) => {
+// Batch update tasks - SQLite Compatible
+router.put('/batch-update', requireAuth, async (req, res) => {
   try {
     const { task_ids, updates } = req.body;
     
@@ -237,26 +211,23 @@ router.put('/batch-update', requireAuth, requireAdmin, async (req, res) => {
       });
     }
     
-    updateValues.push(task_ids);
-    
-    const sql = `
-      UPDATE tasks 
-      SET ${updateFields.join(', ')}, updated_at = NOW()
-      WHERE id IN (?)
-    `;
-    
-    await query(sql, updateValues);
+    // SQLite compatible batch update
+    for (const taskId of task_ids) {
+      const sql = `UPDATE tasks SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+      await query(sql, [...updateValues, taskId]);
+    }
     
     res.json({
       success: true,
       message: `${task_ids.length} tasks updated successfully`
     });
   } catch (error) {
+    console.error('Error in batch update:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Bulk import tasks from CSV
+// Bulk import tasks from CSV - UPDATED for global clients
 router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -307,9 +278,10 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
 
     for (const task of tasks) {
       try {
+        // Find client by name or company (global search, no firm_id)
         let clientResults = await query(
-          'SELECT id FROM clients WHERE (name LIKE ? OR company LIKE ?) AND firm_id = ? LIMIT 1',
-          [`%${task.client_name}%`, `%${task.client_name}%`, firm_id]
+          'SELECT id FROM clients WHERE (name LIKE ? OR company LIKE ?) LIMIT 1',
+          [`%${task.client_name}%`, `%${task.client_name}%`]
         );
         
         if (clientResults.length === 0) {
@@ -333,7 +305,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
           }
         }
 
-        const validTypes = await query('SELECT type_key FROM task_types WHERE is_active = TRUE');
+        const validTypes = await query('SELECT type_key FROM task_types WHERE is_active = 1');
         const validTaskTypes = validTypes.map(t => t.type_key);
         if (!validTaskTypes.includes(task.task_type)) {
           task.task_type = 'other';
@@ -346,7 +318,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
 
         const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
         if (!validStatuses.includes(task.status)) {
-          task.status = 'pending';
+          task.status = "pending";
         }
 
         let due_date = null;
@@ -371,14 +343,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
         await query(`
           INSERT INTO task_history (task_id, action_type, new_value, changed_by)
           VALUES (?, 'created', ?, ?)
-        `, [result.insertId, JSON.stringify({ title: task.title, client_id: client_id }), req.user?.id || 1]);
-
-        if (req.auditLogger) {
-          await req.auditLogger('BULK_IMPORT', 'task', result.insertId, null, {
-            title: task.title,
-            client_id: client_id
-          });
-        }
+        `, [result.lastInsertRowid || result.insertId, JSON.stringify({ title: task.title, client_id: client_id }), req.user?.id || 1]);
         
         imported++;
       } catch (dbError) {
@@ -410,34 +375,40 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
 });
 
 // ============================================================================
-// TASK TYPES MANAGEMENT
+// TASK TYPES MANAGEMENT - SQLite Compatible
 // ============================================================================
 
-// Get all task types
+// Get all task types - FIXED SQLite Compatible
 router.get('/types', requireAuth, async (req, res) => {
   try {
     const { include_inactive } = req.query;
     
     let sql = 'SELECT * FROM task_types';
+    const params = [];
+    
     if (!include_inactive || include_inactive === 'false') {
-      sql += ' WHERE is_active = TRUE';
+      sql += ' WHERE is_active = 1';
     }
     sql += ' ORDER BY display_order ASC, type_label ASC';
     
-    const types = await query(sql);
+    const types = await query(sql, params);
     
     res.json({
       success: true,
-      task_types: types
+      task_types: types || []
     });
   } catch (error) {
     console.error('Error fetching task types:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      task_types: []
+    });
   }
 });
 
-// Reorder task types (Admin only)
-router.put('/types-reorder', requireAuth, requireAdmin, async (req, res) => {
+// Reorder task types
+router.put('/types-reorder', requireAuth, async (req, res) => {
   try {
     const { type_orders } = req.body;
 
@@ -460,12 +431,13 @@ router.put('/types-reorder', requireAuth, requireAdmin, async (req, res) => {
       message: 'Task types reordered successfully'
     });
   } catch (error) {
+    console.error('Error reordering task types:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================================================
-// MAIN TASK ROUTES
+// MAIN TASK ROUTES - SQLite Compatible
 // ============================================================================
 
 // Get all tasks (filtered by firm_id)
@@ -478,9 +450,8 @@ router.get('/', requireAuth, async (req, res) => {
         t.*,
         c.name as client_name,
         s.name as assigned_to_name,
-        f.firm_name,
-        (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) as comment_count,
-        (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id AND tc.is_completed = FALSE) as pending_comments
+        f.name as firm_name,
+        (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) as comment_count
       FROM tasks t
       LEFT JOIN clients c ON t.client_id = c.id
       LEFT JOIN staff s ON t.assigned_to = s.id
@@ -529,7 +500,7 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// Create new task
+// Create new task - UPDATED for global clients - FIXED VERSION
 router.post('/', requireAuth, async (req, res) => {
   try {
     const {
@@ -537,8 +508,15 @@ router.post('/', requireAuth, async (req, res) => {
       due_date, status, estimated_hours, actual_hours, amount
     } = req.body;
 
-    if (!firm_id) {
-      return res.status(400).json({ success: false, message: 'Firm ID is required' });
+    // Auto-assign to first available firm if not provided
+    let actualFirmId = firm_id;
+    if (!actualFirmId) {
+      const defaultFirm = await query('SELECT id FROM firms WHERE status = ? ORDER BY id ASC LIMIT 1', ['active']);
+      if (defaultFirm.length > 0) {
+        actualFirmId = defaultFirm[0].id;
+      } else {
+        return res.status(400).json({ success: false, message: 'No active firms found' });
+      }
     }
 
     if (!title || !client_id) {
@@ -548,9 +526,10 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
 
-    const [client] = await query('SELECT firm_id FROM clients WHERE id = ?', [client_id]);
-    if (client && client.firm_id != firm_id) {
-      return res.status(400).json({ success: false, message: 'Client does not belong to selected firm' });
+    // Verify client exists
+    const client = await query('SELECT id FROM clients WHERE id = ?', [client_id]);
+    if (client.length === 0) {
+      return res.status(400).json({ success: false, message: 'Client not found' });
     }
 
     const result = await query(`
@@ -559,27 +538,23 @@ router.post('/', requireAuth, async (req, res) => {
         due_date, status, estimated_hours, actual_hours, amount, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      firm_id, title, description, client_id, assigned_to || null, priority || 'medium',
+      actualFirmId, title, description, client_id, assigned_to || null, priority || 'medium',
       task_type || 'other', due_date || null, status || 'pending',
       estimated_hours || 0, actual_hours || 0, amount || 0, req.user?.id || 1
     ]);
 
+    const taskId = result.lastInsertRowid || result.insertId;
+
     await query(`
       INSERT INTO task_history (task_id, action_type, new_value, changed_by)
       VALUES (?, 'created', ?, ?)
-    `, [result.insertId, JSON.stringify({ title, client_id, assigned_to }), req.user?.id || 1]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'task', result.insertId, null, {
-        title, client_id, task_type
-      });
-    }
+    `, [taskId, JSON.stringify({ title, client_id, assigned_to }), req.user?.id || 1]);
 
     res.json({
       success: true,
       message: 'Task created successfully',
-      taskId: result.insertId,
-      data: { id: result.insertId }
+      taskId: taskId,
+      data: { id: taskId }
     });
   } catch (error) {
     console.error('Error creating task:', error);
@@ -587,8 +562,8 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// Create new task type (Admin only)
-router.post('/types', requireAuth, requireAdmin, async (req, res) => {
+// Create new task type
+router.post('/types', requireAuth, async (req, res) => {
   try {
     const {
       type_key,
@@ -628,16 +603,10 @@ router.post('/types', requireAuth, requireAdmin, async (req, res) => {
       req.user?.id || 1
     ]);
 
-    if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'task_type', result.insertId, null, {
-        type_key, type_label
-      });
-    }
-
     res.json({
       success: true,
       message: 'Task type created successfully',
-      task_type_id: result.insertId
+      task_type_id: result.lastInsertRowid || result.insertId
     });
   } catch (error) {
     console.error('Error creating task type:', error);
@@ -659,7 +628,7 @@ router.get('/:id/details', requireAuth, async (req, res) => {
         t.*,
         c.name as client_name,
         s.name as assigned_to_name,
-        f.firm_name
+        f.name as firm_name
       FROM tasks t
       LEFT JOIN clients c ON t.client_id = c.id
       LEFT JOIN staff s ON t.assigned_to = s.id
@@ -724,14 +693,15 @@ router.get('/:id/history', requireAuth, async (req, res) => {
       history: history
     });
   } catch (error) {
+    console.error('Error fetching task history:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Task Reassignment with History
+// Task Reassignment with History - SQLite Compatible
 router.put('/:id/reassign', requireAuth, async (req, res) => {
   try {
-    const { assigned_to, reassigned_by, reason } = req.body;
+    const { assigned_to, reason } = req.body;
     const taskId = req.params.id;
 
     const taskExists = await query('SELECT id, assigned_to, title FROM tasks WHERE id = ?', [taskId]);
@@ -769,8 +739,7 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
 
     await query(`
       UPDATE tasks 
-      SET assigned_to = ?, 
-          updated_at = NOW()
+      SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [assigned_to || null, taskId]);
 
@@ -784,13 +753,6 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
       req.user?.id || 1,
       reason || 'No reason provided'
     ]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('REASSIGN', 'task', taskId, { assigned_to: oldAssignment }, {
-        assigned_to: assigned_to,
-        reason: reason
-      });
-    }
 
     const updatedTask = await query(`
       SELECT 
@@ -813,7 +775,7 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
   }
 });
 
-// Task Reschedule with History
+// Task Reschedule with History - SQLite Compatible
 router.put('/:id/reschedule', requireAuth, async (req, res) => {
   try {
     const { new_due_date, reason } = req.body;
@@ -839,7 +801,7 @@ router.put('/:id/reschedule', requireAuth, async (req, res) => {
 
     await query(`
       UPDATE tasks 
-      SET due_date = ?, updated_at = NOW()
+      SET due_date = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [new_due_date, taskId]);
 
@@ -854,13 +816,6 @@ router.put('/:id/reschedule', requireAuth, async (req, res) => {
       reason || 'No reason provided'
     ]);
 
-    if (req.auditLogger) {
-      await req.auditLogger('RESCHEDULE', 'task', taskId,
-        { due_date: oldDueDate },
-        { due_date: new_due_date, reason: reason }
-      );
-    }
-
     res.json({
       success: true,
       message: 'Task rescheduled successfully',
@@ -874,7 +829,7 @@ router.put('/:id/reschedule', requireAuth, async (req, res) => {
   }
 });
 
-// Update task status
+// Update task status - SQLite Compatible
 router.put('/:id/status', requireAuth, async (req, res) => {
   try {
     const { status } = req.body;
@@ -900,14 +855,14 @@ router.put('/:id/status', requireAuth, async (req, res) => {
 
     let completionDate = null;
     if (status === 'completed') {
-      completionDate = new Date();
+      completionDate = new Date().toISOString();
     }
 
     await query(`
       UPDATE tasks SET
         status = ?, 
         completion_date = ?, 
-        updated_at = NOW()
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [status, completionDate, taskId]);
 
@@ -915,10 +870,6 @@ router.put('/:id/status', requireAuth, async (req, res) => {
       INSERT INTO task_history (task_id, action_type, old_value, new_value, changed_by)
       VALUES (?, 'status_changed', ?, ?, ?)
     `, [taskId, oldStatus, status, req.user?.id || 1]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('STATUS_CHANGE', 'task', taskId, { status: oldStatus }, { status: status });
-    }
 
     res.json({ 
       success: true, 
@@ -953,21 +904,14 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     }
 
     const result = await query(`
-      INSERT INTO task_comments (task_id, comment_text, created_by)
+      INSERT INTO task_comments (task_id, comment_text, user_id)
       VALUES (?, ?, ?)
     `, [taskId, comment_text, created_by]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'task_comment', result.insertId, null, {
-        task_id: taskId,
-        comment_text: comment_text.substring(0, 100) + '...'
-      });
-    }
 
     res.json({
       success: true,
       message: 'Comment added successfully',
-      commentId: result.insertId
+      commentId: result.lastInsertRowid || result.insertId
     });
   } catch (error) {
     console.error('Error adding comment:', error);
@@ -992,12 +936,13 @@ router.get('/types/:id', requireAuth, async (req, res) => {
       task_type: types[0]
     });
   } catch (error) {
+    console.error('Error fetching task type:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Update task type (Admin only)
-router.put('/types/:id', requireAuth, requireAdmin, async (req, res) => {
+// Update task type
+router.put('/types/:id', requireAuth, async (req, res) => {
   try {
     const typeId = req.params.id;
     const {
@@ -1039,7 +984,7 @@ router.put('/types/:id', requireAuth, requireAdmin, async (req, res) => {
         description = ?,
         is_active = ?,
         display_order = ?,
-        updated_at = NOW()
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
       type_key || oldType.type_key,
@@ -1052,23 +997,18 @@ router.put('/types/:id', requireAuth, requireAdmin, async (req, res) => {
       typeId
     ]);
 
-    if (req.auditLogger) {
-      await req.auditLogger('UPDATE', 'task_type', typeId, oldType, {
-        type_key, type_label, is_active
-      });
-    }
-
     res.json({
       success: true,
       message: 'Task type updated successfully'
     });
   } catch (error) {
+    console.error('Error updating task type:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Delete task type (Admin only)
-router.delete('/types/:id', requireAuth, requireAdmin, async (req, res) => {
+// Delete task type
+router.delete('/types/:id', requireAuth, async (req, res) => {
   try {
     const typeId = req.params.id;
 
@@ -1087,8 +1027,8 @@ router.delete('/types/:id', requireAuth, requireAdmin, async (req, res) => {
       [deletedType.type_key]
     );
 
-    if (tasksCount[0].count > 0) {
-      await query('UPDATE task_types SET is_active = FALSE WHERE id = ?', [typeId]);
+    if (tasksCount[0] && tasksCount[0].count > 0) {
+      await query('UPDATE task_types SET is_active = 0 WHERE id = ?', [typeId]);
       
       return res.json({
         success: true,
@@ -1098,15 +1038,12 @@ router.delete('/types/:id', requireAuth, requireAdmin, async (req, res) => {
 
     await query('DELETE FROM task_types WHERE id = ?', [typeId]);
 
-    if (req.auditLogger) {
-      await req.auditLogger('DELETE', 'task_type', typeId, deletedType, null);
-    }
-
     res.json({
       success: true,
       message: 'Task type deleted successfully'
     });
   } catch (error) {
+    console.error('Error deleting task type:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1119,7 +1056,7 @@ router.get('/:id', requireAuth, async (req, res) => {
         t.*,
         c.name as client_name,
         s.name as assigned_to_name,
-        f.firm_name
+        f.name as firm_name
       FROM tasks t
       LEFT JOIN clients c ON t.client_id = c.id
       LEFT JOIN staff s ON t.assigned_to = s.id
@@ -1133,11 +1070,12 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     res.json({ success: true, data: tasks[0], task: tasks[0] });
   } catch (error) {
+    console.error('Error fetching single task:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Update task
+// Update task - SQLite Compatible
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     const {
@@ -1159,7 +1097,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 
     let completionDate = oldTask.completion_date;
     if (status === 'completed' && oldTask.status !== 'completed') {
-      completionDate = new Date();
+      completionDate = new Date().toISOString();
     }
 
     await query(`
@@ -1167,7 +1105,7 @@ router.put('/:id', requireAuth, async (req, res) => {
         title = ?, description = ?, client_id = ?, assigned_to = ?,
         priority = ?, task_type = ?, due_date = ?, status = ?,
         estimated_hours = ?, actual_hours = ?, amount = ?,
-        completion_date = ?, updated_at = NOW()
+        completion_date = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
       title, description, client_id, assigned_to || null, priority,
@@ -1182,14 +1120,9 @@ router.put('/:id', requireAuth, async (req, res) => {
       `, [taskId, oldTask.status, status, req.user?.id || 1]);
     }
 
-    if (req.auditLogger) {
-      await req.auditLogger('UPDATE', 'task', taskId, oldTask, {
-        title, status, priority, task_type
-      });
-    }
-
     res.json({ success: true, message: 'Task updated successfully' });
   } catch (error) {
+    console.error('Error updating task:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1207,23 +1140,18 @@ router.delete('/:id', requireAuth, async (req, res) => {
       });
     }
 
-    const deletedTask = tasks[0];
-
     const invoices = await query('SELECT COUNT(*) as count FROM invoices WHERE task_id = ?', [taskId]);
     
-    if (invoices[0].count > 0) {
+    if (invoices[0] && invoices[0].count > 0) {
       await query('UPDATE tasks SET status = "cancelled" WHERE id = ?', [taskId]);
       return res.json({ success: true, message: 'Task cancelled (has associated invoice)' });
     }
 
     await query('DELETE FROM tasks WHERE id = ?', [taskId]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('DELETE', 'task', taskId, deletedTask, null);
-    }
     
     res.json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
+    console.error('Error deleting task:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1249,16 +1177,14 @@ router.put('/comments/:commentId', requireAuth, async (req, res) => {
       });
     }
 
-    const oldComment = currentComments[0];
-
     let updateFields = [];
     let updateValues = [];
 
     if (comment_text) {
       updateFields.push('comment_text = ?');
       updateValues.push(comment_text);
-      updateFields.push('is_edited = TRUE');
-      updateFields.push('edited_at = NOW()');
+      updateFields.push('is_edited = 1');
+      updateFields.push('edited_at = CURRENT_TIMESTAMP');
     }
 
     if (is_completed !== undefined) {
@@ -1266,20 +1192,13 @@ router.put('/comments/:commentId', requireAuth, async (req, res) => {
       updateValues.push(is_completed);
     }
 
-    updateFields.push('updated_at = NOW()');
+    updateFields.push('updated_at = CURRENT_TIMESTAMP');
     updateValues.push(commentId);
 
     await query(`
       UPDATE task_comments SET ${updateFields.join(', ')}
       WHERE id = ?
     `, updateValues);
-
-    if (req.auditLogger) {
-      await req.auditLogger('UPDATE', 'task_comment', commentId, oldComment, {
-        comment_text: comment_text,
-        is_completed: is_completed
-      });
-    }
 
     res.json({
       success: true,
@@ -1304,13 +1223,7 @@ router.delete('/comments/:commentId', requireAuth, async (req, res) => {
       });
     }
 
-    const deletedComment = comments[0];
-
     await query('DELETE FROM task_comments WHERE id = ?', [commentId]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('DELETE', 'task_comment', commentId, deletedComment, null);
-    }
 
     res.json({
       success: true,

@@ -18,7 +18,7 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Generate invoice number
+// Generate invoice number - FIXED: SQLite compatible
 async function generateInvoiceNumber(firmId) {
   if (firmId) {
     const lastInvoice = await query(
@@ -36,12 +36,13 @@ async function generateInvoiceNumber(firmId) {
   } else {
     const invoiceDate = new Date();
     const year = invoiceDate.getFullYear();
-    const invoiceCount = await query('SELECT COUNT(*) as count FROM invoices WHERE YEAR(created_at) = ?', [year]);
+    // FIXED: SQLite compatible YEAR function
+    const invoiceCount = await query('SELECT COUNT(*) as count FROM invoices WHERE strftime(\'%Y\', created_at) = ?', [year.toString()]);
     return `INV-${year}-${String(invoiceCount[0].count + 1).padStart(4, '0')}`;
   }
 }
 
-// Enhanced Get all invoices with improved status calculation
+// Enhanced Get all invoices with improved status calculation - FIXED: SQLite compatible
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const {
@@ -66,8 +67,8 @@ router.get('/', authenticateToken, async (req, res) => {
                WHEN COALESCE(SUM(r.amount + COALESCE(r.discount_amount, 0)), 0) >= i.total_amount THEN 'paid'
                ELSE 'partially_paid'
              END as computed_status,
-             CASE WHEN i.due_date < CURDATE() AND COALESCE(SUM(r.amount + COALESCE(r.discount_amount, 0)), 0) < i.total_amount
-                  THEN DATEDIFF(CURDATE(), i.due_date) ELSE 0 END as days_overdue
+             CASE WHEN i.due_date < DATE('now') AND COALESCE(SUM(r.amount + COALESCE(r.discount_amount, 0)), 0) < i.total_amount
+                  THEN CAST(julianday('now') - julianday(i.due_date) as INTEGER) ELSE 0 END as days_overdue
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
       LEFT JOIN tasks t ON i.task_id = t.id
@@ -87,7 +88,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     if (status && status !== 'all') {
       if (status === 'overdue') {
-        sql += ' AND i.due_date < CURDATE()';
+        sql += " AND i.due_date < DATE('now')";
       } else {
         // We'll filter by computed status after grouping
         sql += ' AND ? = ?'; // Placeholder, will be replaced
@@ -98,7 +99,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (client_id && client_id !== 'all') { sql += ' AND i.client_id = ?'; params.push(parseInt(client_id)); }
     if (min_amount && parseFloat(min_amount) > 0) { sql += ' AND i.total_amount >= ?'; params.push(parseFloat(min_amount)); }
     if (max_amount && parseFloat(max_amount) > 0) { sql += ' AND i.total_amount <= ?'; params.push(parseFloat(max_amount)); }
-    if (overdue_only === 'true') { sql += ' AND i.due_date < CURDATE()'; }
+    if (overdue_only === 'true') { sql += " AND i.due_date < DATE('now')"; }
 
     sql += ' GROUP BY i.id';
     
@@ -350,7 +351,7 @@ router.put('/invoices/:id', authenticateToken, async (req, res) => {
     }
 
     if (updateFields.length > 0) {
-      updateFields.push('updated_at = NOW()');
+      updateFields.push("updated_at = DATETIME('now')");
       updateParams.push(req.params.id);
 
       await query(`UPDATE invoices SET ${updateFields.join(', ')} WHERE id = ?`, updateParams);
@@ -397,7 +398,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     
     const paid_date = status === 'paid' ? new Date() : null;
     
-    await query('UPDATE invoices SET status = ?, paid_date = ?, updated_at = NOW() WHERE id = ?', 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
                 [status, paid_date, invoiceId]);
     
     if (req.auditLogger && oldInvoice.length > 0) {
@@ -466,7 +467,7 @@ router.delete('/invoices/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Enhanced Create receipt with improved status auto-update
+// Enhanced Create receipt with improved status auto-update - FIXED: SQLite compatible
 router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
   try {
     const { 
@@ -498,9 +499,10 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
     }
 
     const year = new Date().getFullYear();
+    // FIXED: SQLite compatible YEAR function
     const latestReceipt = await query(
-      'SELECT receipt_number FROM receipts WHERE YEAR(created_at) = ? ORDER BY id DESC LIMIT 1', 
-      [year]
+      'SELECT receipt_number FROM receipts WHERE strftime(\'%Y\', created_at) = ? ORDER BY id DESC LIMIT 1', 
+      [year.toString()]
     );
     let receiptNumber = `RCP-${year}-0001`;
     
@@ -533,7 +535,7 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
       newStatus = 'partially_paid';
     }
 
-    await query('UPDATE invoices SET status = ?, paid_date = ?, updated_at = NOW() WHERE id = ?', 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
                 [newStatus, paidDate, invoiceId]);
 
     if (req.auditLogger) {
@@ -605,7 +607,7 @@ router.delete('/receipts/:id', authenticateToken, async (req, res) => {
       newStatus = 'partially_paid';
     }
 
-    await query('UPDATE invoices SET status = ?, paid_date = ?, updated_at = NOW() WHERE id = ?', 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
                 [newStatus, paidDate, invoiceId]);
 
     if (req.auditLogger) {
@@ -839,7 +841,7 @@ router.get('/receipts/:id/print', authenticateToken, async (req, res) => {
   }
 });
 
-// Enhanced Get billing stats
+// Enhanced Get billing stats - FIXED: SQLite compatible
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const { firm_id } = req.query;
@@ -854,13 +856,13 @@ router.get('/stats', authenticateToken, async (req, res) => {
         END) as pending_amount,
         SUM(COALESCE(r_sum.total_received, 0)) as paid_amount,
         SUM(i.total_amount) as total_billed,
-        COUNT(CASE WHEN i.due_date < CURDATE() AND COALESCE(r_sum.total_received, 0) < i.total_amount THEN 1 END) as overdue_invoices,
-        SUM(CASE WHEN i.due_date < CURDATE() AND COALESCE(r_sum.total_received, 0) < i.total_amount THEN (i.total_amount - COALESCE(r_sum.total_received, 0)) ELSE 0 END) as overdue_amount,
+        COUNT(CASE WHEN i.due_date < DATE('now') AND COALESCE(r_sum.total_received, 0) < i.total_amount THEN 1 END) as overdue_invoices,
+        SUM(CASE WHEN i.due_date < DATE('now') AND COALESCE(r_sum.total_received, 0) < i.total_amount THEN (i.total_amount - COALESCE(r_sum.total_received, 0)) ELSE 0 END) as overdue_amount,
         AVG(i.total_amount) as avg_invoice_amount,
         (SELECT SUM(r2.amount) FROM receipts r2 
          INNER JOIN invoices i2 ON r2.invoice_id = i2.id 
-         WHERE MONTH(r2.receipt_date) = MONTH(CURDATE()) 
-         AND YEAR(r2.receipt_date) = YEAR(CURDATE())
+         WHERE strftime('%m', r2.receipt_date) = strftime('%m', 'now') 
+         AND strftime('%Y', r2.receipt_date) = strftime('%Y', 'now')
          ${firm_id ? 'AND r2.firm_id = ?' : ''}) as period_revenue
       FROM invoices i
       LEFT JOIN (

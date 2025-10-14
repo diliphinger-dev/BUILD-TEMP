@@ -42,34 +42,7 @@ function generateLicenseKey(companyName, email, expiryDate, maxUsers = 5, featur
   return token;
 }
 
-/**
- * Generate a trial license key
- * @param {number} durationDays - Trial duration in days (default: 30)
- * @param {string} email - Trial user email
- * @returns {string} Signed JWT trial license key
- */
-function generateTrialLicense(durationDays = 30, email = 'trial@ca-office.com') {
-  const expiryDate = new Date();
-  expiryDate.setDate(expiryDate.getDate() + durationDays);
-  
-  const data = {
-    company: 'Trial User',
-    email: email,
-    expiry: expiryDate.toISOString(),
-    users: 3,
-    issued: new Date().toISOString(),
-    type: 'trial',
-    licenseId: crypto.randomUUID(),
-    features: {
-      advancedReports: false,
-      apiAccess: false,
-      customBranding: false,
-      prioritySupport: false
-    }
-  };
-  
-  return jwt.sign(data, LICENSE_SECRET, { algorithm: 'HS256' });
-}
+// REMOVED: generateTrialLicense function - No more trial license generation
 
 /**
  * Generate a lifetime license key
@@ -96,6 +69,39 @@ function generateLifetimeLicense(companyName, email, maxUsers = 10, features = {
       apiAccess: true,
       customBranding: true,
       prioritySupport: true,
+      ...features
+    }
+  };
+  
+  return jwt.sign(data, LICENSE_SECRET, { algorithm: 'HS256' });
+}
+
+/**
+ * Generate a subscription-based license key
+ * @param {string} companyName - Name of the company
+ * @param {string} email - Contact email
+ * @param {number} durationMonths - License duration in months
+ * @param {number} maxUsers - Maximum number of users allowed
+ * @param {object} features - Optional feature flags
+ * @returns {string} Signed JWT subscription license key
+ */
+function generateSubscriptionLicense(companyName, email, durationMonths = 12, maxUsers = 5, features = {}) {
+  const expiryDate = new Date();
+  expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
+  
+  const data = {
+    company: companyName,
+    email: email,
+    expiry: expiryDate.toISOString(),
+    users: maxUsers,
+    issued: new Date().toISOString(),
+    type: 'subscription',
+    licenseId: crypto.randomUUID(),
+    features: {
+      advancedReports: features.advancedReports || true,
+      apiAccess: features.apiAccess || false,
+      customBranding: features.customBranding || false,
+      prioritySupport: features.prioritySupport || true,
       ...features
     }
   };
@@ -256,13 +262,47 @@ function getLicenseInfo(licenseKey) {
   };
 }
 
+/**
+ * Generate enterprise license key (for large organizations)
+ * @param {string} companyName - Name of the company
+ * @param {string} email - Contact email
+ * @param {string|Date} expiryDate - License expiration date
+ * @param {number} maxUsers - Maximum number of users allowed
+ * @returns {string} Signed JWT enterprise license key
+ */
+function generateEnterpriseLicense(companyName, email, expiryDate, maxUsers = 50) {
+  const data = {
+    company: companyName,
+    email: email,
+    expiry: expiryDate instanceof Date ? expiryDate.toISOString() : expiryDate,
+    users: maxUsers,
+    issued: new Date().toISOString(),
+    type: 'enterprise',
+    licenseId: crypto.randomUUID(),
+    features: {
+      advancedReports: true,
+      apiAccess: true,
+      customBranding: true,
+      prioritySupport: true,
+      multiLocation: true,
+      auditTrails: true,
+      sso: true
+    }
+  };
+  
+  return jwt.sign(data, LICENSE_SECRET, { algorithm: 'HS256' });
+}
+
+// FIXED: Export only the functions that don't include trial generation
 module.exports = { 
   generateLicenseKey, 
   verifyLicenseKey,
-  generateTrialLicense,
   generateLifetimeLicense,
+  generateSubscriptionLicense,
+  generateEnterpriseLicense,
   decodeLicenseKey,
   extendLicense,
   hasFeature,
   getLicenseInfo
+  // REMOVED: generateTrialLicense - No longer exported
 };

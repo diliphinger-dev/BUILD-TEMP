@@ -1,18 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 
 // Get all firms
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const firms = await query(`
       SELECT f.*, 
-             COUNT(DISTINCT c.id) as client_count,
-             COUNT(DISTINCT sf.staff_id) as staff_count
-      FROM firms f
-      LEFT JOIN clients c ON f.id = c.firm_id AND c.status = 'active'
-      LEFT JOIN staff_firms sf ON f.id = sf.firm_id AND sf.status = 'active'
+         COUNT(DISTINCT s.id) as staff_count
+  FROM firms f
+  LEFT JOIN staff s ON f.id = s.primary_firm_id AND s.status = 'active'
       WHERE f.status = 'active'
       GROUP BY f.id
       ORDER BY f.firm_name
@@ -32,42 +30,18 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get selected/active firm - FIXED VERSION
-router.get('/selected', authenticateToken, async (req, res) => {
+// Get selected/active firm - SIMPLIFIED VERSION
+router.get('/selected', requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id;
-    let selectedFirm = null;
-    
-    try {
-      const userFirm = await query(`
-        SELECT f.*, s.selected_firm_id
-        FROM staff s
-        LEFT JOIN firms f ON s.selected_firm_id = f.id
-        WHERE s.id = ?
-      `, [userId]);
-      
-      if (userFirm[0] && userFirm[0].selected_firm_id && userFirm[0].id) {
-        selectedFirm = userFirm[0];
-      }
-    } catch (columnError) {
-      console.warn('selected_firm_id column access error:', columnError.message);
-    }
-    
-    // Get first active firm as default if no selected firm
-    if (!selectedFirm) {
-      const defaultFirm = await query(`
-        SELECT * FROM firms 
-        WHERE status = 'active' 
-        ORDER BY created_at ASC 
-        LIMIT 1
-      `);
-      
-      if (defaultFirm[0]) {
-        selectedFirm = defaultFirm[0];
-      }
-    }
+    // Get first active firm as default
+    const defaultFirm = await query(`
+      SELECT * FROM firms 
+      WHERE status = 'active' 
+      ORDER BY id ASC 
+      LIMIT 1
+    `);
 
-    if (!selectedFirm) {
+    if (!defaultFirm || defaultFirm.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'No active firms found'
@@ -76,8 +50,8 @@ router.get('/selected', authenticateToken, async (req, res) => {
 
     res.json({ 
       success: true, 
-      firm: selectedFirm,
-      data: selectedFirm
+      firm: defaultFirm[0],
+      data: defaultFirm[0]
     });
   } catch (error) {
     console.error('Error fetching selected firm:', error);
@@ -89,24 +63,9 @@ router.get('/selected', authenticateToken, async (req, res) => {
 });
 
 // Get firms accessible by current user
-router.get('/my-firms', authenticateToken, async (req, res) => {
+router.get('/my-firms', requireAuth, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const userRole = req.user.role;
-
-    let firms;
-    if (userRole === 'admin') {
-      firms = await query('SELECT * FROM firms WHERE status = "active" ORDER BY firm_name');
-    } else {
-      firms = await query(`
-        SELECT f.*, sf.access_level, sf.is_primary
-        FROM firms f
-        INNER JOIN staff_firms sf ON f.id = sf.firm_id
-        WHERE sf.staff_id = ? AND f.status = 'active' AND sf.status = 'active'
-        ORDER BY sf.is_primary DESC, f.firm_name
-      `, [userId]);
-    }
-
+    const firms = await query("SELECT * FROM firms WHERE status = 'active' ORDER BY firm_name");
     res.json({ success: true, data: firms });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -114,21 +73,21 @@ router.get('/my-firms', authenticateToken, async (req, res) => {
 });
 
 // Get single firm
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const firmId = req.params.id;
     
     const firm = await query(`
       SELECT f.*,
         COUNT(DISTINCT c.id) as client_count,
-        COUNT(DISTINCT sf.staff_id) as staff_count,
+        COUNT(DISTINCT s.id) as staff_count,
         COUNT(DISTINCT t.id) as task_count,
-        SUM(DISTINCT i.total_amount) as total_revenue
+        COALESCE(SUM(CASE WHEN i.status = 'paid' THEN i.total_amount ELSE 0 END), 0) as total_revenue
       FROM firms f
-      LEFT JOIN clients c ON f.id = c.firm_id
-      LEFT JOIN staff_firms sf ON f.id = sf.firm_id AND sf.status = 'active'
+      -- Clients are now global, no firm_id
+      LEFT JOIN staff s ON f.id = s.primary_firm_id AND s.status = 'active'
       LEFT JOIN tasks t ON f.id = t.firm_id
-      LEFT JOIN invoices i ON f.id = i.firm_id AND i.status = 'paid'
+      LEFT JOIN invoices i ON f.id = i.firm_id
       WHERE f.id = ?
       GROUP BY f.id
     `, [firmId]);
@@ -152,48 +111,45 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create new firm
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
-    const { firm_name, firm_code, firm_address, firm_city, firm_state, firm_pincode, 
-            firm_phone, firm_email, firm_pan, firm_gstin, firm_tan } = req.body;
+    const { 
+      name, 
+      firm_name, 
+      registration_number, 
+      address, 
+      city, 
+      state, 
+      postal_code,
+      phone, 
+      email, 
+      website,
+      gstin, 
+      pan, 
+      owner_name 
+    } = req.body;
 
-    if (!firm_name || !firm_code) {
+    if (!name && !firm_name) {
       return res.status(400).json({
         success: false,
-        message: 'Firm name and code are required'
+        message: 'Firm name is required'
       });
     }
 
-    const existingFirm = await query(
-      'SELECT id FROM firms WHERE firm_code = ?',
-      [firm_code]
-    );
-
-    if (existingFirm.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Firm code already exists'
-      });
-    }
+    const firmName = firm_name || name;
 
     const result = await query(`
-      INSERT INTO firms (firm_name, firm_code, firm_address, firm_city, firm_state, 
-                        firm_pincode, firm_phone, firm_email, firm_pan, firm_gstin, 
-                        firm_tan, status, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
-    `, [firm_name, firm_code, firm_address, firm_city, firm_state, firm_pincode, 
-        firm_phone, firm_email, firm_pan, firm_gstin, firm_tan, req.user.id]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'firms', result.insertId, null, {
-        firm_name, firm_code
-      });
-    }
+      INSERT INTO firms (name, firm_name, registration_number, address, city, state, 
+                        postal_code, phone, email, website, gstin, pan, owner_name, 
+                        status, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+    `, [firmName, firmName, registration_number, address, city, state, postal_code, 
+        phone, email, website, gstin, pan, owner_name, req.user.id]);
 
     res.json({ 
       success: true, 
-      data: { id: result.insertId }, 
-      firm_id: result.insertId,
+      data: { id: result.lastInsertRowid }, 
+      firm_id: result.lastInsertRowid,
       message: 'Firm created successfully' 
     });
   } catch (error) {
@@ -202,11 +158,10 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// Switch selected firm
-router.post('/:id/switch', authenticateToken, async (req, res) => {
+// Switch selected firm (simplified - just return success)
+router.post('/:id/switch', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
 
     const firm = await query(
       'SELECT * FROM firms WHERE id = ? AND status = ?',
@@ -217,19 +172,6 @@ router.post('/:id/switch', authenticateToken, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Firm not found or inactive'
-      });
-    }
-
-    try {
-      await query('UPDATE staff SET selected_firm_id = ? WHERE id = ?', [id, userId]);
-    } catch (updateError) {
-      console.error('Error updating selected firm:', updateError);
-    }
-
-    if (req.auditLogger) {
-      await req.auditLogger('UPDATE', 'user_firm_switch', userId, null, {
-        switched_to_firm_id: id,
-        firm_name: firm[0].firm_name
       });
     }
 
@@ -249,11 +191,24 @@ router.post('/:id/switch', authenticateToken, async (req, res) => {
 });
 
 // Update firm
-router.put('/:id', requireAdmin, async (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const firmId = req.params.id;
-    const { firm_name, firm_address, firm_city, firm_state, firm_pincode, 
-            firm_phone, firm_email, firm_pan, firm_gstin, firm_tan, status } = req.body;
+    const { 
+      name, 
+      firm_name, 
+      address, 
+      city, 
+      state, 
+      postal_code, 
+      phone, 
+      email, 
+      website,
+      gstin, 
+      pan, 
+      owner_name, 
+      status 
+    } = req.body;
 
     const currentFirm = await query('SELECT * FROM firms WHERE id = ?', [firmId]);
     
@@ -264,20 +219,16 @@ router.put('/:id', requireAdmin, async (req, res) => {
       });
     }
 
+    const firmName = firm_name || name;
+
     await query(`
       UPDATE firms 
-      SET firm_name = ?, firm_address = ?, firm_city = ?, firm_state = ?, 
-          firm_pincode = ?, firm_phone = ?, firm_email = ?, firm_pan = ?, 
-          firm_gstin = ?, firm_tan = ?, status = ?, updated_at = NOW()
+      SET name = ?, firm_name = ?, address = ?, city = ?, state = ?, 
+          postal_code = ?, phone = ?, email = ?, website = ?, gstin = ?, 
+          pan = ?, owner_name = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [firm_name, firm_address, firm_city, firm_state, firm_pincode, 
-        firm_phone, firm_email, firm_pan, firm_gstin, firm_tan, status, firmId]);
-
-    if (req.auditLogger) {
-      await req.auditLogger('UPDATE', 'firms', firmId, currentFirm[0], {
-        firm_name, status
-      });
-    }
+    `, [firmName, firmName, address, city, state, postal_code, 
+        phone, email, website, gstin, pan, owner_name, status || 'active', firmId]);
 
     res.json({ success: true, message: 'Firm updated successfully' });
   } catch (error) {
@@ -287,7 +238,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 });
 
 // Delete firm
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const firmId = req.params.id;
     
@@ -300,15 +251,11 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       });
     }
 
-    const [clientCheck] = await query('SELECT COUNT(*) as count FROM clients WHERE firm_id = ?', [firmId]);
+    const clientCheck = [{ count: 0 }]; // Clients are global now
     
-    if (clientCheck.count > 0) {
+    if (clientCheck[0] && clientCheck[0].count > 0) {
       await query('UPDATE firms SET status = "inactive" WHERE id = ?', [firmId]);
       
-      if (req.auditLogger) {
-        await req.auditLogger('UPDATE', 'firms', firmId, firm[0], { status: 'inactive' });
-      }
-
       res.json({ 
         success: true, 
         message: 'Firm deactivated successfully (has active clients)'
@@ -316,10 +263,6 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     } else {
       await query('DELETE FROM firms WHERE id = ?', [firmId]);
       
-      if (req.auditLogger) {
-        await req.auditLogger('DELETE', 'firms', firmId, firm[0], null);
-      }
-
       res.json({ 
         success: true, 
         message: 'Firm deleted successfully' 

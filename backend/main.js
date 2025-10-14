@@ -6,7 +6,7 @@ const fs = require('fs');
 
 // Enhanced environment setup for consistency
 process.env.ELECTRON_APP = 'true';
-process.env.JWT_SECRET = 'CA-Office-2024-Super-Secret-Key-Dilip-Production-Ready'; // Ensure consistency
+process.env.JWT_SECRET = 'enhanced-ca-office-secret-key'; // Ensure consistency
 
 let mainWindow;
 let serverStarted = false;
@@ -149,7 +149,7 @@ function startBackendServer() {
       process.env.BACKUP_PATH = backupsPath;
       process.env.DB_PATH = path.join(dataPath, 'ca_office.db');
       process.env.USER_DATA_PATH = userDataPath;
-      process.env.JWT_SECRET = 'CA-Office-2024-Super-Secret-Key-Dilip-Production-Ready';
+      process.env.JWT_SECRET = 'enhanced-ca-office-secret-key';
       process.env.DB_TYPE = 'mysql';
       process.env.DB_HOST = 'localhost';
       process.env.DB_USER = 'ca_admin';
@@ -258,19 +258,8 @@ async function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     
-    // Show license dialog if demo/expired
-    if (!global.licenseStatus.valid && !isDev) {
-      setTimeout(() => {
-        mainWindow.webContents.executeJavaScript(`
-          localStorage.setItem('showLicenseDialog', 'true');
-          localStorage.setItem('licenseStatus', '${JSON.stringify(global.licenseStatus)}');
-          // Trigger license dialog if the application supports it
-          if (window.showLicenseDialog) {
-            window.showLicenseDialog();
-          }
-        `);
-      }, 2000);
-    }
+    // REMOVED: Auto-show license dialog functionality
+    // Users must manually access license activation through menu or UI
     
     if (isDev) {
       mainWindow.webContents.openDevTools();
@@ -365,6 +354,24 @@ function createMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Activate License',
+          accelerator: 'CmdOrCtrl+Shift+L',
+          click: () => {
+            // Navigate to license activation page or trigger manual activation
+            mainWindow.webContents.executeJavaScript(`
+              if (window.location.pathname !== '/license') {
+                window.location.href = '/license';
+              } else {
+                // If already on license page, trigger the dialog
+                if (window.showLicenseDialog) {
+                  window.showLicenseDialog();
+                }
+              }
+            `);
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Open Logs Folder',
           click: () => {
             shell.openPath(logsPath);
@@ -450,6 +457,68 @@ function createMenu() {
           click: () => {
             mainWindow.webContents.executeJavaScript(`window.location.href = '/billing';`);
           }
+        },
+        { type: 'separator' },
+        {
+          label: 'License Management',
+          accelerator: 'CmdOrCtrl+7',
+          click: () => {
+            mainWindow.webContents.executeJavaScript(`window.location.href = '/license';`);
+          }
+        }
+      ]
+    },
+    {
+      label: 'License',
+      submenu: [
+        {
+          label: 'Check License Status',
+          click: () => {
+            const status = global.licenseStatus;
+            const licenseText = status.valid ? 'Active' : 'Demo/Expired';
+            const detail = status.valid 
+              ? `Company: ${status.data?.company || 'N/A'}\nExpires: ${status.data?.expiry || 'N/A'}\nUsers: ${status.data?.users || 'N/A'}`
+              : 'No valid license found. Please contact support for activation.';
+            
+            dialog.showMessageBox(mainWindow, {
+              type: status.valid ? 'info' : 'warning',
+              title: 'License Status',
+              message: `License Status: ${licenseText}`,
+              detail: detail,
+              buttons: ['OK', 'Activate License']
+            }).then((result) => {
+              if (result.response === 1) { // Activate License clicked
+                mainWindow.webContents.executeJavaScript(`
+                  if (window.location.pathname !== '/license') {
+                    window.location.href = '/license';
+                  }
+                `);
+              }
+            });
+          }
+        },
+        {
+          label: 'Activate License',
+          click: () => {
+            mainWindow.webContents.executeJavaScript(`
+              if (window.location.pathname !== '/license') {
+                window.location.href = '/license';
+              }
+            `);
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Contact Support',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'License Support',
+              message: 'CA Office Pro License Support',
+              detail: 'For license activation or support:\n\nEmail: support@caoffice.com\nPhone: +91-XXXXXXXXXX\n\nPlease have your purchase details ready when contacting support.',
+              buttons: ['OK']
+            });
+          }
         }
       ]
     },
@@ -486,7 +555,9 @@ Features:
 - Audit Logging
 - Report Generation
 - Data Import/Export
-- License Management System`,
+- License Management System
+
+Note: Trial licenses are no longer available. Please contact support for commercial licensing.`,
               buttons: ['OK']
             });
           }
