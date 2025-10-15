@@ -142,8 +142,8 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     if (month && year) {
-      sql += ' AND MONTH(a.attendance_date) = ? AND YEAR(a.attendance_date) = ?';
-      params.push(parseInt(month), parseInt(year));
+      sql += ' AND strftime(\'%m\', a.attendance_date) = ? AND strftime(\'%Y\', a.attendance_date) = ?';
+      params.push(String(parseInt(month)).padStart(2, '0'), year.toString());
     }
 
     if (staff_id && staff_id !== 'all') {
@@ -189,8 +189,8 @@ router.get('/', requireAuth, async (req, res) => {
       countParams.push(end_date);
     }
     if (month && year) {
-      countSql += ' AND MONTH(a.attendance_date) = ? AND YEAR(a.attendance_date) = ?';
-      countParams.push(parseInt(month), parseInt(year));
+      countSql += ' AND strftime(\'%m\', a.attendance_date) = ? AND strftime(\'%Y\', a.attendance_date) = ?';
+      countParams.push(String(parseInt(month)).padStart(2, '0'), year.toString());
     }
     if (staff_id && staff_id !== 'all') {
       countSql += ' AND a.staff_id = ?';
@@ -237,10 +237,14 @@ router.get('/stats', requireAuth, async (req, res) => {
       dateCondition = 'AND a.attendance_date <= ?';
       params.push(end_date);
     } else if (month && year) {
-      dateCondition = 'AND MONTH(a.attendance_date) = ? AND YEAR(a.attendance_date) = ?';
-      params.push(parseInt(month), parseInt(year));
+      dateCondition = 'AND strftime(\'%m\', a.attendance_date) = ? AND strftime(\'%Y\', a.attendance_date) = ?';
+      params.push(String(parseInt(month)).padStart(2, '0'), year.toString());
     } else {
-      dateCondition = 'AND MONTH(a.attendance_date) = MONTH(CURDATE()) AND YEAR(a.attendance_date) = YEAR(CURDATE())';
+      const currentDate = new Date();
+      const currentMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const currentYear = currentDate.getFullYear().toString();
+      dateCondition = 'AND strftime(\'%m\', a.attendance_date) = ? AND strftime(\'%Y\', a.attendance_date) = ?';
+      params.push(currentMonth, currentYear);
     }
 
     let overallStatsSql = `
@@ -255,9 +259,9 @@ router.get('/stats', requireAuth, async (req, res) => {
         AVG(a.total_hours) as avg_hours_per_day,
         SUM(a.total_hours) as total_hours,
         COALESCE(ROUND(
-  (COUNT(CASE WHEN a.status IN ('present', 'late', 'half_day') THEN 1 END) * 100.0 / 
-   NULLIF(COUNT(CASE WHEN a.status != 'leave' THEN 1 END), 0)), 2
-), 0) as attendance_percentage
+          (CAST(COUNT(CASE WHEN a.status IN ('present', 'late', 'half_day') THEN 1 END) AS REAL) * 100.0 / 
+           NULLIF(COUNT(CASE WHEN a.status != 'leave' THEN 1 END), 0)), 2
+        ), 0) as attendance_percentage
       FROM attendance a
       WHERE 1=1 ${dateCondition}
     `;
@@ -282,9 +286,9 @@ router.get('/stats', requireAuth, async (req, res) => {
         COALESCE(SUM(a.total_hours), 0) as total_hours,
         COALESCE(AVG(a.total_hours), 0) as avg_hours,
         COALESCE(ROUND(
-  (COUNT(CASE WHEN a.status IN ('present', 'late', 'half_day') THEN 1 END) * 100.0 / 
-   NULLIF(COUNT(CASE WHEN a.status != 'leave' THEN 1 END), 0)), 2
-), 0) as attendance_percentage
+          (CAST(COUNT(CASE WHEN a.status IN ('present', 'late', 'half_day') THEN 1 END) AS REAL) * 100.0 / 
+           NULLIF(COUNT(CASE WHEN a.status != 'leave' THEN 1 END), 0)), 2
+        ), 0) as attendance_percentage
       FROM staff s
       LEFT JOIN attendance a ON s.id = a.staff_id ${dateCondition.replace('AND ', 'AND ')}
       WHERE s.status = 'active'
@@ -319,6 +323,7 @@ router.get('/stats', requireAuth, async (req, res) => {
     const dailyPatternParams = staff_id && staff_id !== 'all' ? [...params, parseInt(staff_id)] : params;
     const dailyPattern = await query(dailyPatternSql, dailyPatternParams);
 
+    // SQLite compatible late arrival calculation
     const lateArrivalSql = `
       SELECT 
         s.name as staff_name,
@@ -327,10 +332,10 @@ router.get('/stats', requireAuth, async (req, res) => {
         AVG(
           CASE 
             WHEN a.check_in_time > '09:15:00' THEN 
-              TIME_TO_SEC(TIMEDIFF(a.check_in_time, '09:15:00'))
+              (strftime('%s', a.check_in_time) - strftime('%s', '09:15:00'))
             ELSE 0 
           END
-        ) as avg_late_minutes
+        ) as avg_late_seconds
       FROM attendance a
       LEFT JOIN staff s ON a.staff_id = s.id
       WHERE a.status = 'late' 
@@ -345,8 +350,10 @@ router.get('/stats', requireAuth, async (req, res) => {
     const lateArrivalParams = staff_id && staff_id !== 'all' ? [...params, parseInt(staff_id)] : params;
     const lateArrival = await query(lateArrivalSql, lateArrivalParams);
 
+    // Convert seconds to minutes
     lateArrival.forEach(record => {
-      record.avg_late_minutes = Math.round(record.avg_late_minutes / 60);
+      record.avg_late_minutes = Math.round(record.avg_late_seconds / 60);
+      delete record.avg_late_seconds;
     });
 
     res.json({
@@ -373,8 +380,8 @@ router.get('/staff/:staff_id/summary', requireAuth, async (req, res) => {
     const params = [staffId];
 
     if (month && year) {
-      dateFilter = 'AND MONTH(attendance_date) = ? AND YEAR(attendance_date) = ?';
-      params.push(parseInt(month), parseInt(year));
+      dateFilter = 'AND strftime(\'%m\', attendance_date) = ? AND strftime(\'%Y\', attendance_date) = ?';
+      params.push(String(parseInt(month)).padStart(2, '0'), year.toString());
     }
 
     const summary = await query(`
@@ -493,7 +500,7 @@ router.post('/mark', requireAuth, [
           status = ?,
           location = COALESCE(?, location),
           notes = COALESCE(?, notes),
-          updated_at = NOW()
+          updated_at = DATETIME('now')
         WHERE staff_id = ? AND attendance_date = ?
       `, [
         check_in_time || existingAttendance[0].check_in_time,
@@ -610,7 +617,7 @@ router.post('/bulk-mark', requireAuth, async (req, res) => {
               total_hours = ?,
               status = ?,
               notes = ?,
-              updated_at = NOW()
+              updated_at = DATETIME('now')
             WHERE staff_id = ? AND attendance_date = ?
           `, [check_in_time, check_out_time, totalHours, status, notes, staff_id, attendance_date]);
           updated++;
@@ -718,10 +725,13 @@ router.get('/calendar/:staff_id/:year/:month', requireAuth, [
         status, location, notes, approved_by, created_at, updated_at
       FROM attendance
       WHERE staff_id = ? 
-        AND YEAR(attendance_date) = ? 
-        AND MONTH(attendance_date) = ?
+        AND strftime('%Y', attendance_date) = ? 
+        AND strftime('%m', attendance_date) = ?
       ORDER BY attendance_date
-    `, [staff_id, year, month]);
+    `, [staff_id, year.toString(), String(parseInt(month)).padStart(2, '0')]);
+
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const monthEnd = new Date(year, month, 0).toISOString().split('T')[0];
 
     const leaves = await query(`
       SELECT 
@@ -729,14 +739,14 @@ router.get('/calendar/:staff_id/:year/:month', requireAuth, [
         reason, approved_by, created_at
       FROM leaves
       WHERE staff_id = ?
-        AND ((YEAR(start_date) = ? AND MONTH(start_date) = ?) 
-             OR (YEAR(end_date) = ? AND MONTH(end_date) = ?)
+        AND ((strftime('%Y', start_date) = ? AND strftime('%m', start_date) = ?) 
+             OR (strftime('%Y', end_date) = ? AND strftime('%m', end_date) = ?)
              OR (start_date <= ? AND end_date >= ?))
       ORDER BY start_date
     `, [
-      staff_id, year, month, year, month,
-      `${year}-${String(month).padStart(2, '0')}-01`,
-      new Date(year, month, 0).toISOString().split('T')[0]
+      staff_id, year.toString(), String(parseInt(month)).padStart(2, '0'), 
+      year.toString(), String(parseInt(month)).padStart(2, '0'),
+      monthEnd, monthStart
     ]);
 
     res.json({
@@ -819,7 +829,7 @@ router.put('/:id', requireAdmin, [
       params.push(approved_by);
     }
 
-    updates.push('updated_at = NOW()');
+    updates.push('updated_at = DATETIME(\'now\')');
     params.push(attendanceId);
 
     const sql = `UPDATE attendance SET ${updates.join(', ')} WHERE id = ?`;

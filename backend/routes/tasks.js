@@ -42,12 +42,12 @@ router.get('/analytics', requireAuth, async (req, res) => {
     let sql = `
       SELECT 
         COUNT(*) as total_tasks,
-        SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_tasks,
-        SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending_tasks,
-        SUM(CASE WHEN status = "in_progress" THEN 1 ELSE 0 END) as in_progress_tasks,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
         SUM(CASE WHEN due_date < DATE('now') AND status != 'completed' THEN 1 ELSE 0 END) as overdue_tasks,
         SUM(amount) as total_value,
-        SUM(CASE WHEN status = "completed" THEN amount ELSE 0 END) as completed_value
+        SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END) as completed_value
       FROM tasks
       WHERE 1=1
     `;
@@ -98,7 +98,7 @@ router.get('/analytics', requireAuth, async (req, res) => {
         c.name as client_name,
         COUNT(t.id) as task_count,
         SUM(t.amount) as total_amount,
-        SUM(CASE WHEN t.status = "completed" THEN 1 ELSE 0 END) as completed_count
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_count
       FROM clients c
       LEFT JOIN tasks t ON c.id = t.client_id
       WHERE 1=1
@@ -146,7 +146,7 @@ router.get('/ready-for-billing', requireAuth, async (req, res) => {
         c.company as client_company
       FROM tasks t
       LEFT JOIN clients c ON t.client_id = c.id
-      WHERE t.status = "completed" 
+      WHERE t.status = 'completed' 
         AND COALESCE(t.amount, 0) > 0
         AND t.id NOT IN (
           SELECT COALESCE(task_id, 0) 
@@ -294,8 +294,8 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
         let assigned_to = null;
         if (task.staff_name) {
           const staffResults = await query(
-            'SELECT id FROM staff WHERE name LIKE ? AND status = "active" LIMIT 1',
-            [`%${task.staff_name}%`]
+            'SELECT id FROM staff WHERE name LIKE ? AND status = ? LIMIT 1',
+            [`%${task.staff_name}%`, 'active']
           );
           
           if (staffResults.length > 0) {
@@ -318,7 +318,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
 
         const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
         if (!validStatuses.includes(task.status)) {
-          task.status = "pending";
+          task.status = 'pending';
         }
 
         let due_date = null;
@@ -704,6 +704,14 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
     const { assigned_to, reason } = req.body;
     const taskId = req.params.id;
 
+    // Fix: Add proper validation
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid task ID'
+      });
+    }
+
     const taskExists = await query('SELECT id, assigned_to, title FROM tasks WHERE id = ?', [taskId]);
     if (taskExists.length === 0) {
       return res.status(404).json({
@@ -714,10 +722,11 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
 
     const currentTask = taskExists[0];
 
-    if (assigned_to) {
+    // Fix: Properly handle assigned_to validation
+    if (assigned_to && assigned_to !== '' && assigned_to !== 'null') {
       const staffExists = await query(
-        'SELECT id, name FROM staff WHERE id = ? AND status = "active"', 
-        [assigned_to]
+        'SELECT id, name FROM staff WHERE id = ? AND status = ?', 
+        [assigned_to, 'active']
       );
       
       if (staffExists.length === 0) {
@@ -728,7 +737,11 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
       }
     }
 
-    if (currentTask.assigned_to == assigned_to) {
+    // Fix: Normalize values for comparison
+    const currentAssigned = currentTask.assigned_to ? currentTask.assigned_to.toString() : null;
+    const newAssigned = (assigned_to && assigned_to !== '' && assigned_to !== 'null') ? assigned_to.toString() : null;
+
+    if (currentAssigned === newAssigned) {
       return res.status(400).json({
         success: false,
         message: 'Task is already assigned to this person'
@@ -737,23 +750,31 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
 
     const oldAssignment = currentTask.assigned_to;
 
+    // Fix: Update task assignment
     await query(`
       UPDATE tasks 
       SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [assigned_to || null, taskId]);
+    `, [newAssigned, taskId]);
 
-    await query(`
-      INSERT INTO task_history (task_id, action_type, old_value, new_value, changed_by, change_reason)
-      VALUES (?, 'reassigned', ?, ?, ?, ?)
-    `, [
-      taskId, 
-      oldAssignment ? oldAssignment.toString() : 'unassigned',
-      assigned_to ? assigned_to.toString() : 'unassigned',
-      req.user?.id || 1,
-      reason || 'No reason provided'
-    ]);
+    // Fix: Add task history with proper error handling
+    try {
+      await query(`
+        INSERT INTO task_history (task_id, action_type, old_value, new_value, changed_by, change_reason)
+        VALUES (?, 'reassigned', ?, ?, ?, ?)
+      `, [
+        taskId, 
+        oldAssignment ? oldAssignment.toString() : 'unassigned',
+        newAssigned ? newAssigned.toString() : 'unassigned',
+        req.user?.id || 1,
+        reason || 'No reason provided'
+      ]);
+    } catch (historyError) {
+      console.warn('Warning: Could not insert task history:', historyError.message);
+      // Continue execution - don't fail the reassignment if history fails
+    }
 
+    // Fix: Return updated task information
     const updatedTask = await query(`
       SELECT 
         t.id, t.title, t.assigned_to,
@@ -771,7 +792,10 @@ router.put('/:id/reassign', requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Error reassigning task:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Unknown error occurred'
+    });
   }
 });
 
@@ -904,7 +928,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
     }
 
     const result = await query(`
-      INSERT INTO task_comments (task_id, comment_text, user_id)
+      INSERT INTO task_comments (task_id, comment_text, created_by)
       VALUES (?, ?, ?)
     `, [taskId, comment_text, created_by]);
 
@@ -1143,7 +1167,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     const invoices = await query('SELECT COUNT(*) as count FROM invoices WHERE task_id = ?', [taskId]);
     
     if (invoices[0] && invoices[0].count > 0) {
-      await query('UPDATE tasks SET status = "cancelled" WHERE id = ?', [taskId]);
+      await query('UPDATE tasks SET status = ? WHERE id = ?', ['cancelled', taskId]);
       return res.json({ success: true, message: 'Task cancelled (has associated invoice)' });
     }
 
@@ -1189,7 +1213,7 @@ router.put('/comments/:commentId', requireAuth, async (req, res) => {
 
     if (is_completed !== undefined) {
       updateFields.push('is_completed = ?');
-      updateValues.push(is_completed);
+      updateValues.push(is_completed ? 1 : 0);
     }
 
     updateFields.push('updated_at = CURRENT_TIMESTAMP');

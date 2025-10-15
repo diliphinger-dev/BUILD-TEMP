@@ -8,13 +8,18 @@ export const formatCurrency = (amount, currency = 'INR') => {
 export const formatDate = (dateString, options = {}) => {
   if (!dateString) return '-';
   
+  const date = new Date(dateString);
+  
+  // Fix: Ensure proper year formatting
+  if (isNaN(date.getTime())) return '-';
+  
   const defaultOptions = {
     year: 'numeric',
-    month: 'short',
+    month: 'short', 
     day: 'numeric'
   };
   
-  return new Date(dateString).toLocaleDateString('en-IN', { ...defaultOptions, ...options });
+  return date.toLocaleDateString('en-IN', { ...defaultOptions, ...options });
 };
 
 export const getStatusBadgeClass = (status, type = 'default') => {

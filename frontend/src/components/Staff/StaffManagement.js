@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import AdminPasswordResetModal from './AdminPasswordResetModal';
 
 // Helper function to get auth token from multiple sources
 const getAuthToken = (appContext) => {
@@ -80,6 +81,19 @@ const StaffManagement = () => {
 
   const handleEditStaff = (member) => {
     openModal(<EnhancedStaffForm appContext={appContext} staff={member} onSuccess={() => { closeModal(); fetchStaff(); }} />);
+  };
+
+  const handleResetPassword = (member) => {
+    openModal(
+      <AdminPasswordResetModal 
+        staff={member} 
+        appContext={appContext} 
+        onSuccess={() => { 
+          closeModal(); 
+          fetchStaff(); 
+        }} 
+      />
+    );
   };
 
   const handleDeleteStaff = async (id) => {
@@ -237,6 +251,17 @@ const StaffManagement = () => {
                           <i className="fas fa-edit"></i>
                         </button>
                         
+                        {/* PASSWORD RESET BUTTON - NEW */}
+                        {user?.role === 'admin' && (
+                          <button 
+                            className="btn btn-sm btn-warning"
+                            onClick={() => handleResetPassword(member)}
+                            title="Reset Password"
+                          >
+                            <i className="fas fa-key"></i>
+                          </button>
+                        )}
+                        
                         {(user?.role === 'admin' || user?.role === 'senior_ca') && (
                           <button 
                             className="btn btn-sm btn-info"
@@ -248,7 +273,7 @@ const StaffManagement = () => {
                         )}
                         
                         <button 
-                          className="btn btn-sm btn-warning"
+                          className="btn btn-sm btn-secondary"
                           onClick={() => handleManageLeaves(member)}
                           title="Manage Leaves"
                         >

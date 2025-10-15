@@ -427,8 +427,29 @@ const TaskCommentsModal = ({ task, onSuccess }) => {
   };
 
   const toggleCompletion = async (commentId, currentStatus) => {
-    await handleUpdateComment(commentId, { is_completed: !currentStatus });
-  };
+  try {
+    const response = await fetch(`/api/tasks/comments/${commentId}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getAuthToken()}`
+      },
+      body: JSON.stringify({ 
+        is_completed: !currentStatus 
+      })
+    });
+
+    if (response.ok) {
+      fetchTaskDetails(); // Refresh the data
+    } else {
+      const error = await response.json();
+      alert(`Error updating status: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Error toggling completion:', error);
+    alert('Error updating comment status');
+  }
+};
 
   return (
     <div style={{ maxWidth: '800px', height: '600px' }}>

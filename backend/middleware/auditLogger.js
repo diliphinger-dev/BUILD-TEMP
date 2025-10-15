@@ -7,7 +7,7 @@ const auditLogger = async (userId, action, entityType, entityId, oldValues = nul
       INSERT INTO audit_logs (
         user_id, action, entity_type, entity_id, old_values, new_values, 
         ip_address, user_agent, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
     `, [
       userId,
       action,

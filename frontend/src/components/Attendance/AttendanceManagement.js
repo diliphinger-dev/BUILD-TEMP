@@ -21,7 +21,7 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
   const [formData, setFormData] = useState({
     staff_id: staff?.id || '',
     attendance_date: selectedDate || new Date().toISOString().split('T')[0],
-    check_in_time: '',
+    check_in_time: '09:00',  // FIXED: Default time
     check_out_time: '',
     status: 'present',
     location: '',
@@ -32,6 +32,12 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
   useEffect(() => {
     if (!staff) {
       fetchAllStaff();
+    }
+    // FIXED: Set default times when component loads
+    if (!formData.check_in_time) {
+      const now = new Date();
+      const currentTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM format
+      setFormData(prev => ({ ...prev, check_in_time: currentTime }));
     }
   }, []);
 
@@ -53,66 +59,113 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // FIXED: Validation before submission
     if (!formData.staff_id) {
       alert('Please select a staff member');
       return;
+    }
+
+    // FIXED: Ensure staff_id is a number
+    const submissionData = {
+      ...formData,
+      staff_id: parseInt(formData.staff_id), // Convert to number
+      check_in_time: formData.check_in_time || '09:00',
+      check_out_time: formData.check_out_time || '',
+    };
+
+    // FIXED: Remove empty fields that might cause validation issues
+    if (!submissionData.check_out_time) {
+      delete submissionData.check_out_time;
+    }
+    if (!submissionData.location) {
+      delete submissionData.location;
+    }
+    if (!submissionData.notes) {
+      delete submissionData.notes;
     }
     
     setLoading(true);
     const token = getAuthToken(appContext);
 
     try {
+      console.log('Submitting attendance data:', submissionData); // Debug log
+
       const response = await fetch('/api/attendance/mark', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submissionData)
       });
 
+      const result = await response.json();
+
       if (response.ok) {
-        const result = await response.json();
-        alert(`Attendance marked successfully. Status: ${result.status.replace('_', ' ').toUpperCase()}`);
+        alert('Attendance marked successfully!');
         onSuccess();
       } else {
-        const error = await response.json();
-        alert(`Error marking attendance: ${error.message}`);
+        console.error('Attendance marking failed:', result);
+        alert(`Error: ${result.message || 'Failed to mark attendance'}`);
+        
+        // FIXED: Show validation errors if any
+        if (result.errors && Array.isArray(result.errors)) {
+          const errorMessages = result.errors.map(err => err.msg).join('\n');
+          alert(`Validation errors:\n${errorMessages}`);
+        }
       }
     } catch (error) {
-      console.error('Error:', error);
-      alert('Error marking attendance');
+      console.error('Error marking attendance:', error);
+      alert('Error marking attendance. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    // FIXED: Special handling for staff_id to ensure it's always a number
+    if (name === 'staff_id') {
+      setFormData({ ...formData, [name]: value ? parseInt(value) : '' });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
-
-  const selectedStaff = staff || allStaff.find(s => s.id === parseInt(formData.staff_id));
 
   return (
     <div style={{ maxWidth: '500px' }}>
       <div className="modal-header">
         <h3 className="modal-title">
-          <i className="fas fa-clock" style={{ marginRight: '8px' }}></i>
+          <i className="fas fa-clock" style={{ marginRight: '8px', color: '#3498db' }}></i>
           Mark Attendance
         </h3>
         <button className="btn btn-sm btn-outline" onClick={onSuccess}>
           <i className="fas fa-times"></i>
         </button>
       </div>
-      
+
       <form onSubmit={handleSubmit}>
         <div className="modal-body">
-          {!staff && (
-            <div className="form-group">
-              <label className="form-label">Staff Member *</label>
+          {/* Staff Selection */}
+          <div className="form-group">
+            <label className="form-label">Staff Member *</label>
+            {staff ? (
+              <div style={{ 
+                padding: '12px', 
+                background: '#f8f9fa', 
+                borderRadius: '6px',
+                border: '1px solid #dee2e6' 
+              }}>
+                <strong>{staff.name}</strong>
+                <div style={{ fontSize: '14px', color: '#666' }}>
+                  {staff.email} • {staff.role?.replace('_', ' ').toUpperCase()}
+                </div>
+              </div>
+            ) : (
               <select
                 name="staff_id"
-                className="form-control form-select"
+                className="form-control"
                 value={formData.staff_id}
                 onChange={handleChange}
                 required
@@ -124,83 +177,66 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
                   </option>
                 ))}
               </select>
-            </div>
-          )}
-
-          {selectedStaff && (
-            <div style={{ background: '#f8f9fa', padding: '12px', borderRadius: '8px', marginBottom: '16px' }}>
-              <strong>{selectedStaff.name}</strong> - {selectedStaff.role?.replace('_', ' ').toUpperCase()}
-              <br />
-              <small>{selectedStaff.email}</small>
-            </div>
-          )}
-
-          <div className="row">
-            <div className="col-2">
-              <div className="form-group">
-                <label className="form-label">Date *</label>
-                <input
-                  type="date"
-                  name="attendance_date"
-                  className="form-control"
-                  value={formData.attendance_date}
-                  onChange={handleChange}
-                  required
-                  max={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-            </div>
-            <div className="col-2">
-              <div className="form-group">
-                <label className="form-label">Status *</label>
-                <select
-                  name="status"
-                  className="form-control form-select"
-                  value={formData.status}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="present">Present</option>
-                  <option value="absent">Absent</option>
-                  <option value="late">Late</option>
-                  <option value="half_day">Half Day</option>
-                  <option value="leave">On Leave</option>
-                </select>
-              </div>
-            </div>
+            )}
           </div>
 
-          {formData.status !== 'absent' && formData.status !== 'leave' && (
-            <div className="row">
-              <div className="col-2">
-                <div className="form-group">
-                  <label className="form-label">Check In Time</label>
-                  <input
-                    type="time"
-                    name="check_in_time"
-                    className="form-control"
-                    value={formData.check_in_time}
-                    onChange={handleChange}
-                  />
-                  <small className="text-muted">Standard: 9:00 AM</small>
-                </div>
-              </div>
-              <div className="col-2">
-                <div className="form-group">
-                  <label className="form-label">Check Out Time</label>
-                  <input
-                    type="time"
-                    name="check_out_time"
-                    className="form-control"
-                    value={formData.check_out_time}
-                    onChange={handleChange}
-                  />
-                  <small className="text-muted">Standard: 6:00 PM</small>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Date */}
+          <div className="form-group">
+            <label className="form-label">Date *</label>
+            <input
+              type="date"
+              name="attendance_date"
+              className="form-control"
+              value={formData.attendance_date}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
+          {/* Check In Time */}
+          <div className="form-group">
+            <label className="form-label">Check In Time *</label>
+            <input
+              type="time"
+              name="check_in_time"
+              className="form-control"
+              value={formData.check_in_time}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          {/* Check Out Time */}
+          <div className="form-group">
+            <label className="form-label">Check Out Time</label>
+            <input
+              type="time"
+              name="check_out_time"
+              className="form-control"
+              value={formData.check_out_time}
+              onChange={handleChange}
+            />
+          </div>
+
+          {/* Status */}
+          <div className="form-group">
+            <label className="form-label">Status *</label>
+            <select
+              name="status"
+              className="form-control"
+              value={formData.status}
+              onChange={handleChange}
+              required
+            >
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="half_day">Half Day</option>
+              <option value="absent">Absent</option>
+              <option value="leave">Leave</option>
+            </select>
+          </div>
+
+          {/* Location */}
           <div className="form-group">
             <label className="form-label">Location</label>
             <input
@@ -209,10 +245,12 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
               className="form-control"
               value={formData.location}
               onChange={handleChange}
-              placeholder="Office, Remote, Client Site, etc."
+              placeholder="Office, Client site, Remote, etc."
+              maxLength="100"
             />
           </div>
 
+          {/* Notes */}
           <div className="form-group">
             <label className="form-label">Notes</label>
             <textarea
@@ -221,33 +259,32 @@ const MarkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
               rows="3"
               value={formData.notes}
               onChange={handleChange}
-              placeholder="Additional notes about attendance"
+              placeholder="Any additional notes about attendance..."
+              maxLength="500"
             ></textarea>
           </div>
-
-          {formData.check_in_time && formData.check_out_time && (
-            <div style={{ background: '#e8f5e8', padding: '10px', borderRadius: '6px' }}>
-              <small>
-                <strong>Calculated Hours:</strong> {
-                  (() => {
-                    const checkIn = new Date(`${formData.attendance_date} ${formData.check_in_time}`);
-                    const checkOut = new Date(`${formData.attendance_date} ${formData.check_out_time}`);
-                    const diffMs = checkOut - checkIn;
-                    const hours = Math.max(0, diffMs / (1000 * 60 * 60));
-                    return hours.toFixed(2);
-                  })()
-                } hours
-              </small>
-            </div>
-          )}
         </div>
 
         <div className="modal-footer">
           <button type="button" className="btn btn-outline" onClick={onSuccess}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Marking...' : 'Mark Attendance'}
+          <button 
+            type="submit" 
+            className="btn btn-primary" 
+            disabled={loading || !formData.staff_id}
+          >
+            {loading ? (
+              <>
+                <i className="fas fa-spinner fa-spin" style={{ marginRight: '8px' }}></i>
+                Marking...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-check" style={{ marginRight: '8px' }}></i>
+                Mark Attendance
+              </>
+            )}
           </button>
         </div>
       </form>
@@ -303,18 +340,26 @@ const BulkAttendanceModal = ({ staff, selectedDate, onSuccess, appContext }) => 
 
       if (response.ok) {
         const result = await response.json();
-        alert(`${result.message}\n${result.errors.length > 0 ? 'Some errors occurred - check details.' : ''}`);
-        if (result.errors.length > 0) {
-          console.log('Bulk attendance errors:', result.errors);
+        if (result.success) {
+          alert(`${result.message}\n${result.errors.length > 0 ? 'Some errors occurred - check console for details.' : ''}`);
+          if (result.errors.length > 0) {
+            console.log('Bulk attendance errors:', result.errors);
+          }
+          onSuccess();
+        } else {
+          alert(`Error: ${result.message || 'Unknown error occurred'}`);
         }
-        onSuccess();
       } else {
-        const error = await response.json();
-        alert(`Error in bulk attendance: ${error.message}`);
+        try {
+          const error = await response.json();
+          alert(`Error in bulk attendance: ${error.message || error.error || 'Server error'}`);
+        } catch (e) {
+          alert('Error in bulk attendance: Invalid server response');
+        }
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Error processing bulk attendance');
+      alert('Error processing bulk attendance: Network error');
     } finally {
       setLoading(false);
     }
@@ -616,303 +661,6 @@ const getStatusBadgeClass = (status) => {
   }
 };
 
-const Attendance = () => {
-  const [attendanceData, setAttendanceData] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [todayData, setTodayData] = useState(null);
-  const [stats, setStats] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    staff_id: 'all',
-    start_date: '',
-    end_date: '',
-    status: 'all',
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
-  });
-  const [activeTab, setActiveTab] = useState('today');
-
-  const appContext = useApp();
-  const { openModal, closeModal } = appContext;
-  const { user } = useAuth();
-
-  const hasAccessToAttendance = user && ['admin', 'senior_ca'].includes(user.role);
-
-  useEffect(() => {
-    if (hasAccessToAttendance) {
-      fetchData();
-      fetchTodayData();
-      fetchStaff();
-    } else {
-      setLoading(false);
-    }
-  }, [hasAccessToAttendance, filters]);
-
-  const fetchData = async () => {
-    const token = getAuthToken(appContext);
-    
-    try {
-      const queryParams = new URLSearchParams();
-      
-      if (filters.staff_id) queryParams.append('staff_id', filters.staff_id);
-      if (filters.start_date) queryParams.append('start_date', filters.start_date);
-      if (filters.end_date) queryParams.append('end_date', filters.end_date);
-      if (filters.status) queryParams.append('status', filters.status);
-      
-      const response = await fetch(`/api/attendance?${queryParams}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAttendanceData(data.attendance || []);
-      }
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
-    }
-  };
-
-  const fetchTodayData = async () => {
-    const token = getAuthToken(appContext);
-    
-    try {
-      const response = await fetch('/api/attendance/today', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTodayData(data);
-      }
-    } catch (error) {
-      console.error('Error fetching today\'s attendance:', error);
-    }
-  };
-
-  const fetchStaff = async () => {
-    const token = getAuthToken(appContext);
-    
-    try {
-      const response = await fetch('/api/staff?status=active', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStaff(data.staff || []);
-      }
-    } catch (error) {
-      console.error('Error fetching staff:', error);
-    }
-  };
-
-  const fetchStats = async () => {
-    const token = getAuthToken(appContext);
-    
-    try {
-      const response = await fetch(`/api/attendance/stats?month=${filters.month}&year=${filters.year}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats || {});
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (hasAccessToAttendance && activeTab === 'statistics') {
-      fetchStats();
-    }
-  }, [hasAccessToAttendance, filters.month, filters.year, activeTab]);
-
-  const handleMarkAttendance = (staff = null) => {
-    const today = new Date().toISOString().split('T')[0];
-    openModal(
-      <MarkAttendanceModal 
-        staff={staff} 
-        selectedDate={today}
-        appContext={appContext}
-        onSuccess={() => { 
-          closeModal(); 
-          fetchData(); 
-          fetchTodayData(); 
-        }} 
-      />
-    );
-  };
-
-  const handleBulkMark = () => {
-    const today = new Date().toISOString().split('T')[0];
-    openModal(
-      <BulkAttendanceModal 
-        staff={staff}
-        selectedDate={today}
-        appContext={appContext}
-        onSuccess={() => { 
-          closeModal(); 
-          fetchData(); 
-          fetchTodayData(); 
-        }} 
-      />
-    );
-  };
-
-  const handleHolidaySync = async () => {
-    const token = getAuthToken(appContext);
-    
-    try {
-      const response = await fetch('/api/attendance/sync-holidays', { 
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        alert('Holiday calendar synced successfully');
-        fetchTodayData();
-        fetchData();
-      } else {
-        const error = await response.json();
-        alert(`Error syncing holidays: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('Error syncing holidays:', error);
-      alert('Error syncing holiday calendar');
-    }
-  };
-
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-  };
-
-  if (!hasAccessToAttendance) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '60px' }}>
-        <i className="fas fa-lock" style={{ fontSize: '64px', color: '#e74c3c', marginBottom: '20px' }}></i>
-        <h3 style={{ color: '#e74c3c', marginBottom: '16px' }}>Access Restricted</h3>
-        <p style={{ color: '#666', fontSize: '16px' }}>
-          Attendance management is only accessible to administrators and senior staff members.
-        </p>
-        <div style={{ marginTop: '20px' }}>
-          <a href="/dashboard" className="btn btn-primary">
-            <i className="fas fa-home"></i>
-            Go to Dashboard
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading && activeTab !== 'today') {
-    return (
-      <div className="loading-container" style={{ height: '400px' }}>
-        <div className="loading-spinner"></div>
-        <p>Loading attendance data...</p>
-      </div>
-    );
-  }
-
-  const tabConfig = [
-    { key: 'today', label: "Today's Attendance", icon: 'fas fa-calendar-day' },
-    { key: 'records', label: 'Attendance Records', icon: 'fas fa-list' },
-    { key: 'statistics', label: 'Statistics & Reports', icon: 'fas fa-chart-bar' }
-  ];
-
-  return (
-    <div>
-      {activeTab === 'today' && (
-        <TodayAttendanceWidget 
-          todayData={todayData}
-          onRefresh={fetchTodayData}
-          onMarkAttendance={handleMarkAttendance}
-          onBulkMark={handleBulkMark}
-          onHolidaySync={handleHolidaySync}
-          user={user}
-        />
-      )}
-
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title">
-            <i className="fas fa-user-clock"></i>
-            Attendance Management
-          </h3>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {user?.role === 'admin' && (
-              <button 
-                className="btn btn-outline-info"
-                onClick={handleHolidaySync}
-                title="Sync holiday calendar and mark attendance for holidays/Sundays"
-              >
-                <i className="fas fa-calendar-alt"></i>
-                Sync Holidays
-              </button>
-            )}
-            <button className="btn btn-primary" onClick={() => handleMarkAttendance()}>
-              <i className="fas fa-plus"></i>
-              Mark Attendance
-            </button>
-          </div>
-        </div>
-
-        <div style={{ borderBottom: '1px solid #dee2e6' }}>
-          <div style={{ display: 'flex', gap: '0', padding: '0 24px' }}>
-            {tabConfig.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  padding: '16px 24px',
-                  border: 'none',
-                  background: 'none',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: activeTab === tab.key ? '#3498db' : '#666',
-                  borderBottom: activeTab === tab.key ? '3px solid #3498db' : '3px solid transparent',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-              >
-                <i className={tab.icon} style={{ marginRight: '8px' }}></i>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {activeTab === 'today' && (
-          <div style={{ padding: '24px' }}>
-            <div style={{ textAlign: 'center', color: '#666' }}>
-              <i className="fas fa-calendar-check" style={{ fontSize: '48px', marginBottom: '16px' }}></i>
-              <h4>Today's Attendance Overview</h4>
-              <p>View and manage today's attendance above. Use other tabs for historical data and reports.</p>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'records' && (
-          <AttendanceRecordsTab 
-            attendanceData={attendanceData}
-            staff={staff}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            onMarkAttendance={handleMarkAttendance}
-          />
-        )}
-
-        {activeTab === 'statistics' && (
-          <AttendanceStatisticsTab 
-            stats={stats}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-          />
-        )}
-      </div>
-    </div>
-  );
-};
-
 const AttendanceRecordsTab = ({ attendanceData, staff, filters, onFilterChange, onMarkAttendance }) => {
   return (
     <div style={{ padding: '24px' }}>
@@ -1134,6 +882,342 @@ const AttendanceStatisticsTab = ({ stats, filters, onFilterChange }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const Attendance = () => {
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [todayData, setTodayData] = useState(null);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    staff_id: 'all',
+    start_date: '',
+    end_date: '',
+    status: 'all',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear()
+  });
+  const [activeTab, setActiveTab] = useState('today');
+
+  const appContext = useApp();
+  const { openModal, closeModal } = appContext;
+  const { user } = useAuth();
+
+  const hasAccessToAttendance = user && ['admin', 'senior_ca'].includes(user.role);
+
+  useEffect(() => {
+    if (hasAccessToAttendance) {
+      fetchData();
+      fetchTodayData();
+      fetchStaff();
+    } else {
+      setLoading(false);
+    }
+  }, [hasAccessToAttendance, filters]);
+
+  const fetchData = async () => {
+    const token = getAuthToken(appContext);
+    
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (filters.staff_id && filters.staff_id !== 'all') queryParams.append('staff_id', filters.staff_id);
+      if (filters.start_date) queryParams.append('start_date', filters.start_date);
+      if (filters.end_date) queryParams.append('end_date', filters.end_date);
+      if (filters.status && filters.status !== 'all') queryParams.append('status', filters.status);
+      
+      const response = await fetch(`/api/attendance?${queryParams}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setAttendanceData(data.attendance || []);
+        } else {
+          console.error('API returned error:', data.message);
+        }
+      } else {
+        console.error('Failed to fetch attendance data');
+      }
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+    }
+  };
+
+  const fetchTodayData = async () => {
+    const token = getAuthToken(appContext);
+    
+    try {
+      const response = await fetch('/api/attendance/today', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTodayData(data);
+        } else {
+          console.error('Failed to fetch today data:', data.message);
+        }
+      } else {
+        console.error('Failed to fetch today attendance data');
+      }
+    } catch (error) {
+      console.error('Error fetching today\'s attendance:', error);
+    }
+  };
+
+  const fetchStaff = async () => {
+    const token = getAuthToken(appContext);
+    
+    try {
+      const response = await fetch('/api/staff?status=active', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success !== false) {
+          setStaff(data.staff || []);
+        } else {
+          console.error('Failed to fetch staff:', data.message);
+        }
+      } else {
+        console.error('Failed to fetch staff data');
+      }
+    } catch (error) {
+      console.error('Error fetching staff:', error);
+    }
+  };
+
+  const fetchStats = async () => {
+    const token = getAuthToken(appContext);
+    
+    try {
+      const response = await fetch(`/api/attendance/stats?month=${filters.month}&year=${filters.year}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setStats(data.stats || {});
+        } else {
+          console.error('Failed to fetch stats:', data.message);
+        }
+      } else {
+        console.error('Failed to fetch attendance stats');
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (hasAccessToAttendance && activeTab === 'statistics') {
+      fetchStats();
+    }
+  }, [hasAccessToAttendance, filters.month, filters.year, activeTab]);
+
+  const handleMarkAttendance = (staff = null) => {
+    const today = new Date().toISOString().split('T')[0];
+    openModal(
+      <MarkAttendanceModal 
+        staff={staff} 
+        selectedDate={today}
+        appContext={appContext}
+        onSuccess={() => { 
+          closeModal(); 
+          fetchData(); 
+          fetchTodayData(); 
+        }} 
+      />
+    );
+  };
+
+  const handleBulkMark = () => {
+    if (staff.length === 0) {
+      alert('No staff members available for bulk marking');
+      return;
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    openModal(
+      <BulkAttendanceModal 
+        staff={staff}
+        selectedDate={today}
+        appContext={appContext}
+        onSuccess={() => { 
+          closeModal(); 
+          fetchData(); 
+          fetchTodayData(); 
+        }} 
+      />
+    );
+  };
+
+  const handleHolidaySync = async () => {
+    const token = getAuthToken(appContext);
+    
+    try {
+      const response = await fetch('/api/attendance/sync-holidays', { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          alert('Holiday calendar synced successfully');
+          fetchTodayData();
+          fetchData();
+        } else {
+          alert(`Error syncing holidays: ${result.message || 'Unknown error'}`);
+        }
+      } else {
+        try {
+          const error = await response.json();
+          alert(`Error syncing holidays: ${error.message || error.error || 'Server error'}`);
+        } catch (e) {
+          alert('Error syncing holidays: Invalid server response');
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing holidays:', error);
+      alert('Error syncing holiday calendar: Network error');
+    }
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  if (!hasAccessToAttendance) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '60px' }}>
+        <i className="fas fa-lock" style={{ fontSize: '64px', color: '#e74c3c', marginBottom: '20px' }}></i>
+        <h3 style={{ color: '#e74c3c', marginBottom: '16px' }}>Access Restricted</h3>
+        <p style={{ color: '#666', fontSize: '16px' }}>
+          Attendance management is only accessible to administrators and senior staff members.
+        </p>
+        <div style={{ marginTop: '20px' }}>
+          <a href="/dashboard" className="btn btn-primary">
+            <i className="fas fa-home"></i>
+            Go to Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && activeTab !== 'today') {
+    return (
+      <div className="loading-container" style={{ height: '400px' }}>
+        <div className="loading-spinner"></div>
+        <p>Loading attendance data...</p>
+      </div>
+    );
+  }
+
+  const tabConfig = [
+    { key: 'today', label: "Today's Attendance", icon: 'fas fa-calendar-day' },
+    { key: 'records', label: 'Attendance Records', icon: 'fas fa-list' },
+    { key: 'statistics', label: 'Statistics & Reports', icon: 'fas fa-chart-bar' }
+  ];
+
+  return (
+    <div>
+      {activeTab === 'today' && (
+        <TodayAttendanceWidget 
+          todayData={todayData}
+          onRefresh={fetchTodayData}
+          onMarkAttendance={handleMarkAttendance}
+          onBulkMark={handleBulkMark}
+          onHolidaySync={handleHolidaySync}
+          user={user}
+        />
+      )}
+
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">
+            <i className="fas fa-user-clock"></i>
+            Attendance Management
+          </h3>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {user?.role === 'admin' && (
+              <button 
+                className="btn btn-outline-info"
+                onClick={handleHolidaySync}
+                title="Sync holiday calendar and mark attendance for holidays/Sundays"
+              >
+                <i className="fas fa-calendar-alt"></i>
+                Sync Holidays
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => handleMarkAttendance()}>
+              <i className="fas fa-plus"></i>
+              Mark Attendance
+            </button>
+          </div>
+        </div>
+
+        <div style={{ borderBottom: '1px solid #dee2e6' }}>
+          <div style={{ display: 'flex', gap: '0', padding: '0 24px' }}>
+            {tabConfig.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '16px 24px',
+                  border: 'none',
+                  background: 'none',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: activeTab === tab.key ? '#3498db' : '#666',
+                  borderBottom: activeTab === tab.key ? '3px solid #3498db' : '3px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <i className={tab.icon} style={{ marginRight: '8px' }}></i>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === 'today' && (
+          <div style={{ padding: '24px' }}>
+            <div style={{ textAlign: 'center', color: '#666' }}>
+              <i className="fas fa-calendar-check" style={{ fontSize: '48px', marginBottom: '16px' }}></i>
+              <h4>Today's Attendance Overview</h4>
+              <p>View and manage today's attendance above. Use other tabs for historical data and reports.</p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'records' && (
+          <AttendanceRecordsTab 
+            attendanceData={attendanceData}
+            staff={staff}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onMarkAttendance={handleMarkAttendance}
+          />
+        )}
+
+        {activeTab === 'statistics' && (
+          <AttendanceStatisticsTab 
+            stats={stats}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+          />
+        )}
+      </div>
     </div>
   );
 };

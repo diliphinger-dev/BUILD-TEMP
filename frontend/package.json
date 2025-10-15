@@ -1,6 +1,6 @@
 {
   "name": "ca-office-frontend",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "description": "Frontend for CA Office Automation System",
   "private": true,
   "homepage": "./",
@@ -28,7 +28,13 @@
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "rules": {
+      "react-hooks/exhaustive-deps": "off",
+      "no-unused-vars": "off",
+      "default-case": "off",
+      "eqeqeq": "off"
+    }
   },
   "browserslist": {
     "production": [

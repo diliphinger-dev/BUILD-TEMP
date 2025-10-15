@@ -1,10 +1,13 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useApp } from '../../contexts/AppContext';
+import ChangePasswordModal from '../Profile/ChangePasswordModal';
 
 const Sidebar = () => {
   const location = useLocation();
   const { user, selectedFirm } = useAuth();
+  const { openModal, closeModal } = useApp();
 
   // Define menu items with role-based access and firm management - ADDED FIRM MANAGEMENT
   const menuItems = [
@@ -26,6 +29,16 @@ const Sidebar = () => {
   const visibleMenuItems = menuItems.filter(item => 
     !user?.role || item.roles.includes(user.role)
   );
+
+  const handleChangePassword = () => {
+    openModal(
+      <ChangePasswordModal 
+        onSuccess={closeModal} 
+        appContext={{ openModal, closeModal }} 
+        user={user} 
+      />
+    );
+  };
 
   return (
     <aside style={{
@@ -80,14 +93,14 @@ const Sidebar = () => {
         {user?.role && (
           <div style={{
             background: '#f8f9fa',
-            padding: '10px 14px',
+            padding: '12px 14px',
             borderRadius: '8px',
             fontSize: '12px',
             color: '#666',
             marginBottom: '16px',
             border: '1px solid #e9ecef'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span><strong>Access Level:</strong></span>
               <span style={{ 
                 background: user.role === 'admin' ? '#dc3545' : '#28a745',
@@ -99,6 +112,45 @@ const Sidebar = () => {
               }}>
                 {user.role.replace('_', ' ').toUpperCase()}
               </span>
+            </div>
+            
+            {/* NEW: User Profile Section with Password Change */}
+            <div style={{ 
+              borderTop: '1px solid #e9ecef', 
+              paddingTop: '8px',
+              marginTop: '8px'
+            }}>
+              <div style={{ marginBottom: '6px', fontWeight: '600', color: '#495057' }}>
+                <i className="fas fa-user" style={{ marginRight: '6px', width: '12px' }}></i>
+                {user.name || user.email}
+              </div>
+              <button
+                onClick={handleChangePassword}
+                style={{
+                  background: 'none',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '6px',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  color: '#495057',
+                  cursor: 'pointer',
+                  width: '100%',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#007bff';
+                  e.currentTarget.style.color = 'white';
+                  e.currentTarget.style.borderColor = '#007bff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'none';
+                  e.currentTarget.style.color = '#495057';
+                  e.currentTarget.style.borderColor = '#dee2e6';
+                }}
+              >
+                <i className="fas fa-key" style={{ marginRight: '6px' }}></i>
+                Change Password
+              </button>
             </div>
           </div>
         )}
@@ -178,54 +230,25 @@ const Sidebar = () => {
               fontSize: '14px', 
               fontWeight: '600', 
               color: '#2c3e50',
-              marginBottom: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
+              marginBottom: '12px'
             }}>
-              <i className="fas fa-building" style={{ color: '#8e44ad' }}></i>
-              Firm Actions
+              <i className="fas fa-tools" style={{ marginRight: '8px' }}></i>
+              Quick Actions
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Link 
-                to="/firms"
-                style={{
-                  padding: '8px 12px',
-                  background: 'white',
-                  border: '1px solid #dee2e6',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  color: '#495057',
-                  fontSize: '13px',
-                  textAlign: 'center',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#8e44ad';
-                  e.currentTarget.style.color = 'white';
-                  e.currentTarget.style.borderColor = '#8e44ad';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'white';
-                  e.currentTarget.style.color = '#495057';
-                  e.currentTarget.style.borderColor = '#dee2e6';
-                }}
-              >
-                <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>
-                Add New Firm
-              </Link>
               <Link
                 to="/firms"
                 style={{
+                  display: 'block',
                   padding: '8px 12px',
                   background: 'white',
                   border: '1px solid #dee2e6',
                   borderRadius: '6px',
-                  textDecoration: 'none',
                   color: '#495057',
-                  fontSize: '13px',
+                  textDecoration: 'none',
+                  fontSize: '12px',
+                  fontWeight: '500',
                   textAlign: 'center',
-                  cursor: 'pointer',
                   transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {

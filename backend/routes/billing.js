@@ -209,7 +209,7 @@ router.get('/invoices/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Create invoice from task with multi-firm support
+// Create invoice from task with multi-firm support - FIXED: SQLite compatible
 router.post('/create-from-task', authenticateToken, async (req, res) => {
   try {
     const { 
@@ -242,27 +242,30 @@ router.post('/create-from-task', authenticateToken, async (req, res) => {
     const discountValue = parseFloat(discount_amount || 0);
     const totalAmount = baseAmount + taxAmount - discountValue;
     
-    const invoiceDate = new Date();
-    
-    const result = await query(`
-      INSERT INTO invoices (
-        firm_id, invoice_number, client_id, task_id, invoice_date, due_date, 
-        amount, tax_amount, discount_amount, discount_type, discount_reason,
-        total_amount, payment_terms, notes, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `, [
-      taskFirmId, invoiceNumber, task.client_id, task_id, invoiceDate, 
-      due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
-      baseAmount, taxAmount, discountValue, discount_type, discount_reason,
-      totalAmount, payment_terms || 'Net 30 days', 
-      notes || `Invoice for ${task.title}`, req.user?.id || 1
-    ]);
+    const invoiceDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-    // Update task status to invoiced
-    await query('UPDATE tasks SET status = ? WHERE id = ?', ['invoiced', task_id]);
+const result = await query(`
+  INSERT INTO invoices (
+    firm_id, invoice_number, client_id, task_id, invoice_date, due_date, 
+    amount, tax_amount, discount_amount, discount_type, discount_reason,
+    total_amount, payment_terms, notes, status, created_by
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+`, [
+  taskFirmId, invoiceNumber, task.client_id, task_id, invoiceDate, 
+  due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], 
+  baseAmount, taxAmount, discountValue, discount_type, discount_reason,
+  totalAmount, payment_terms || 'Net 30 days', 
+  notes || `Invoice for ${task.title}`, req.user?.id || 1
+]);
+
+    // FIXED: SQLite uses lastInsertRowid instead of insertId
+    const invoiceId = result.lastInsertRowid || result.insertId;
+
+    // Update task status to invoiced - FIXED: Use proper status value
+    await query('UPDATE tasks SET status = ? WHERE id = ?', ['completed', task_id]);
     
     if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'invoice', result.insertId, null, {
+      await req.auditLogger('CREATE', 'invoice', invoiceId, null, {
         invoice_number: invoiceNumber,
         task_id,
         firm_id: taskFirmId,
@@ -274,9 +277,9 @@ router.post('/create-from-task', authenticateToken, async (req, res) => {
     res.json({ 
       success: true, 
       message: 'Invoice created from task successfully', 
-      invoice_id: result.insertId, 
+      invoice_id: invoiceId, 
       invoice_number: invoiceNumber,
-      data: { id: result.insertId, invoice_number: invoiceNumber }
+      data: { id: invoiceId, invoice_number: invoiceNumber }
     });
   } catch (error) {
     console.error('Error creating invoice from task:', error);
@@ -284,7 +287,7 @@ router.post('/create-from-task', authenticateToken, async (req, res) => {
   }
 });
 
-// Create new invoice (direct creation)
+// Create new invoice (direct creation) - FIXED: SQLite compatible
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { firm_id, client_id, task_id, amount, tax_amount, total_amount, 
@@ -311,9 +314,12 @@ router.post('/', authenticateToken, async (req, res) => {
         discount_amount || 0, discount_type || 'fixed', discount_reason || '',
         total_amount, due_date, payment_terms, notes, req.user?.id || 1]);
 
+    // FIXED: SQLite uses lastInsertRowid instead of insertId
+    const invoiceId = result.lastInsertRowid || result.insertId;
+
     res.json({ 
       success: true, 
-      data: { id: result.insertId, invoice_number }, 
+      data: { id: invoiceId, invoice_number }, 
       message: 'Invoice created successfully' 
     });
   } catch (error) {
@@ -351,7 +357,7 @@ router.put('/invoices/:id', authenticateToken, async (req, res) => {
     }
 
     if (updateFields.length > 0) {
-      updateFields.push("updated_at = DATETIME('now')");
+      updateFields.push("updated_at = CURRENT_TIMESTAMP");
       updateParams.push(req.params.id);
 
       await query(`UPDATE invoices SET ${updateFields.join(', ')} WHERE id = ?`, updateParams);
@@ -398,7 +404,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     
     const paid_date = status === 'paid' ? new Date() : null;
     
-    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
                 [status, paid_date, invoiceId]);
     
     if (req.auditLogger && oldInvoice.length > 0) {
@@ -482,11 +488,15 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
     }
 
     const invoice = invoices[0];
-    const receipts = await query(
-      'SELECT COALESCE(SUM(amount + COALESCE(discount_amount, 0)), 0) as total_paid FROM receipts WHERE invoice_id = ?',
-      [invoiceId]
-    );
-    const totalPaid = parseFloat(receipts[0].total_paid);
+    // REPLACE WITH (FIXED):
+const receipts = await query(
+  'SELECT SUM(amount) as amount_sum, SUM(COALESCE(discount_amount, 0)) as discount_sum FROM receipts WHERE invoice_id = ?',
+  [invoiceId]
+);
+
+const totalPaid = receipts.length > 0 && receipts[0].amount_sum !== null
+  ? (parseFloat(receipts[0].amount_sum || 0) + parseFloat(receipts[0].discount_sum || 0))
+  : 0;
     const pendingAmount = parseFloat(invoice.total_amount) - totalPaid;
     const receiptAmount = parseFloat(amount);
     const discountValue = parseFloat(discount_amount || 0);
@@ -511,15 +521,18 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
       receiptNumber = `RCP-${year}-${String(lastNumber + 1).padStart(4, '0')}`;
     }
 
-    const result = await query(`
-      INSERT INTO receipts (
-        firm_id, receipt_number, invoice_id, amount, discount_amount, payment_method,
-        receipt_date, payment_reference, notes, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      invoice.firm_id, receiptNumber, invoiceId, receiptAmount, discountValue, payment_method,
-      receipt_date || new Date(), payment_reference, notes, req.user?.id || 1
-    ]);
+   const result = await query(`
+  INSERT INTO receipts (
+    firm_id, receipt_number, invoice_id, amount, discount_amount, payment_method,
+    receipt_date, payment_reference, notes, created_by
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, [
+  invoice.firm_id, receiptNumber, invoiceId, receiptAmount, discountValue, payment_method,
+  receipt_date || new Date().toISOString().split('T')[0], payment_reference, notes, req.user?.id || 1
+]);
+
+    // FIXED: SQLite uses lastInsertRowid instead of insertId
+    const receiptId = result.lastInsertRowid || result.insertId;
 
     // Auto-update invoice status based on payments
     const newTotalPaid = totalPaid + receiptAmount + discountValue;
@@ -530,16 +543,16 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
 
     if (newTotalPaid >= totalAmount) {
       newStatus = 'paid';
-      paidDate = new Date();
+      paidDate = new Date().toISOString().split('T')[0];
     } else if (newTotalPaid > 0) {
       newStatus = 'partially_paid';
     }
 
-    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
                 [newStatus, paidDate, invoiceId]);
 
     if (req.auditLogger) {
-      await req.auditLogger('CREATE', 'receipt', result.insertId, null, {
+      await req.auditLogger('CREATE', 'receipt', receiptId, null, {
         receipt_number: receiptNumber,
         invoice_id: invoiceId,
         amount: receiptAmount,
@@ -551,10 +564,10 @@ router.post('/invoices/:id/receipts', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       message: 'Receipt created successfully',
-      receiptId: result.insertId,
+      receiptId: receiptId,
       receipt_number: receiptNumber,
       invoice_status: newStatus,
-      data: { id: result.insertId, receipt_number: receiptNumber }
+      data: { id: receiptId, receipt_number: receiptNumber }
     });
   } catch (error) {
     console.error('Error creating receipt:', error);
@@ -607,7 +620,7 @@ router.delete('/receipts/:id', authenticateToken, async (req, res) => {
       newStatus = 'partially_paid';
     }
 
-    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = DATETIME('now') WHERE id = ?", 
+    await query("UPDATE invoices SET status = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
                 [newStatus, paidDate, invoiceId]);
 
     if (req.auditLogger) {

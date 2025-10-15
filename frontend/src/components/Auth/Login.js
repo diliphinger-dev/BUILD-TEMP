@@ -96,14 +96,15 @@ const Login = () => {
               Email Address
             </label>
             <input
-              type="email"
-              name="email"
-              className="form-control"
-              value={credentials.email}
-              onChange={handleChange}
-              placeholder="Enter your email"
-              required
-              style={{ fontSize: '16px', padding: '14px 16px' }}
+             type="email"
+             name="email"
+             className="form-control"
+             value={credentials.email}           // ✅ Uses 'credentials' not 'formData'
+             onChange={handleChange}
+             placeholder="Enter your email"
+             required
+             autoComplete="username"             // ADD THIS LINE
+             style={{ fontSize: '16px', padding: '14px 16px' }}
             />
           </div>
 
@@ -113,14 +114,15 @@ const Login = () => {
               Password
             </label>
             <input
-              type="password"
-              name="password"
-              className="form-control"
-              value={credentials.password}
-              onChange={handleChange}
-              placeholder="Enter your password"
-              required
-              style={{ fontSize: '16px', padding: '14px 16px' }}
+            type="password"
+            name="password"
+            className="form-control"
+            value={credentials.password}        // ✅ Uses 'credentials' not 'formData'
+            onChange={handleChange}
+            placeholder="Enter your password"
+            required
+            autoComplete="current-password"     // ADD THIS LINE
+            style={{ fontSize: '16px', padding: '14px 16px' }}
             />
           </div>
 

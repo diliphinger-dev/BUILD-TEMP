@@ -16,7 +16,7 @@
     "safe-build": "safe-build.bat",
     "safe-build-ps": "powershell -ExecutionPolicy Bypass -File Safe-Build.ps1",
     "dist": "npm run restore && npm run obfuscate && electron-builder --win",
-	"dist:fast": "npm run build:frontend && electron-builder --win",
+    "dist:fast": "npm run build:frontend && electron-builder --win",
     "dist:secure": "npm run restore && npm run obfuscate && npm run build:frontend && electron-builder --win",
     "dist:dev": "electron-builder --win",
     "dist:safe": "safe-build.bat && echo Build completed safely",
