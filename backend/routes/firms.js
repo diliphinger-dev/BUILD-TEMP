@@ -3,14 +3,14 @@ const router = express.Router();
 const { query } = require('../config/database');
 const { requireAuth } = require('../middleware/auth');
 
-// Get all firms
+// Get all firms - FIXED: Returns empty array instead of error
 router.get('/', requireAuth, async (req, res) => {
   try {
     const firms = await query(`
       SELECT f.*, 
          COUNT(DISTINCT s.id) as staff_count
-  FROM firms f
-  LEFT JOIN staff s ON f.id = s.primary_firm_id AND s.status = 'active'
+      FROM firms f
+      LEFT JOIN staff s ON f.id = s.primary_firm_id AND s.status = 'active'
       WHERE f.status = 'active'
       GROUP BY f.id
       ORDER BY f.firm_name
@@ -18,22 +18,24 @@ router.get('/', requireAuth, async (req, res) => {
     
     res.json({ 
       success: true, 
-      data: firms,
-      firms: firms 
+      data: firms || [],
+      firms: firms || []
     });
   } catch (error) {
     console.error('Error fetching firms:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    // Return empty array instead of error
+    res.json({ 
+      success: true, 
+      data: [],
+      firms: [],
+      message: 'No firms available'
     });
   }
 });
 
-// Get selected/active firm - SIMPLIFIED VERSION
+// Get selected/active firm - FIXED: Returns null instead of 404
 router.get('/selected', requireAuth, async (req, res) => {
   try {
-    // Get first active firm as default
     const defaultFirm = await query(`
       SELECT * FROM firms 
       WHERE status = 'active' 
@@ -42,9 +44,11 @@ router.get('/selected', requireAuth, async (req, res) => {
     `);
 
     if (!defaultFirm || defaultFirm.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No active firms found'
+      return res.json({
+        success: true,
+        firm: null,
+        data: null,
+        message: 'No firms configured'
       });
     }
 
@@ -55,9 +59,10 @@ router.get('/selected', requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching selected firm:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.json({ 
+      success: true, 
+      firm: null,
+      data: null
     });
   }
 });

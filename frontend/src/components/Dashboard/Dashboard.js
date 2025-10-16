@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
+import { useNavigate } from 'react-router-dom';
 import ChangePasswordModal from '../Profile/ChangePasswordModal';
 
 const Dashboard = () => {
@@ -17,9 +18,9 @@ const Dashboard = () => {
   const [tempName, setTempName] = useState('');
   const [loading, setLoading] = useState(true);
   
-  // FIXED: Hooks called at component level
   const { user } = useAuth();
   const { openModal, closeModal } = useApp();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
@@ -28,7 +29,6 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Pass user role and ID for filtering
       const params = new URLSearchParams();
       if (user?.role) params.append('role', user.role);
       if (user?.id) params.append('userId', user.id);
@@ -40,7 +40,6 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      // Use sample data for demo
       setStats({
         total_clients: 25,
         total_staff: 8,
@@ -96,17 +95,6 @@ const Dashboard = () => {
   const handleCancelEdit = () => {
     setTempName('');
     setIsEditingName(false);
-  };
-
-  // FIXED: Function uses hooks via parameters instead of calling directly
-  const handleChangePassword = () => {
-    openModal(
-      <ChangePasswordModal 
-        onSuccess={closeModal} 
-        appContext={{ openModal, closeModal }} 
-        user={user} 
-      />
-    );
   };
 
   const handleTrialDataCleanup = () => {
@@ -202,55 +190,6 @@ const Dashboard = () => {
             }}>
               Complete Practice Management System
             </p>
-
-            {/* FIXED: User Profile Section with Password Change */}
-            {user && (
-              <div style={{ 
-                marginTop: '20px',
-                padding: '16px',
-                background: 'rgba(255,255,255,0.1)',
-                borderRadius: '12px',
-                display: 'inline-block'
-              }}>
-                <div style={{ marginBottom: '12px' }}>
-                  <i className="fas fa-user" style={{ marginRight: '8px' }}></i>
-                  Welcome, <strong>{user.name || user.email}</strong>
-                  <span style={{ 
-                    background: user.role === 'admin' ? '#e74c3c' : '#27ae60',
-                    color: 'white',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    marginLeft: '10px'
-                  }}>
-                    {user.role?.replace('_', ' ').toUpperCase()}
-                  </span>
-                </div>
-                <button
-                  onClick={handleChangePassword}
-                  style={{
-                    background: 'rgba(255,255,255,0.2)',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    borderRadius: '8px',
-                    padding: '8px 16px',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
-                  }}
-                >
-                  <i className="fas fa-key" style={{ marginRight: '8px' }}></i>
-                  Change Password
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -365,7 +304,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions Section */}
+      {/* Quick Actions Section - FIXED: Added onClick handlers */}
       <div className="card" style={{ padding: '32px' }}>
         <h2 style={{ 
           fontSize: '24px', 
@@ -384,22 +323,38 @@ const Dashboard = () => {
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '16px'
         }}>
-          <button className="btn btn-primary btn-lg" style={{ padding: '16px', fontSize: '16px' }}>
+          <button 
+            className="btn btn-primary btn-lg" 
+            onClick={() => navigate('/clients')}
+            style={{ padding: '16px', fontSize: '16px' }}
+          >
             <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>
             Add New Client
           </button>
           
-          <button className="btn btn-success btn-lg" style={{ padding: '16px', fontSize: '16px' }}>
+          <button 
+            className="btn btn-success btn-lg" 
+            onClick={() => navigate('/tasks')}
+            style={{ padding: '16px', fontSize: '16px' }}
+          >
             <i className="fas fa-tasks" style={{ marginRight: '8px' }}></i>
             Create Task
           </button>
           
-          <button className="btn btn-warning btn-lg" style={{ padding: '16px', fontSize: '16px' }}>
+          <button 
+            className="btn btn-warning btn-lg" 
+            onClick={() => navigate('/billing')}
+            style={{ padding: '16px', fontSize: '16px' }}
+          >
             <i className="fas fa-file-invoice" style={{ marginRight: '8px' }}></i>
             Generate Invoice
           </button>
           
-          <button className="btn btn-info btn-lg" style={{ padding: '16px', fontSize: '16px' }}>
+          <button 
+            className="btn btn-info btn-lg" 
+            onClick={() => navigate('/reports')}
+            style={{ padding: '16px', fontSize: '16px' }}
+          >
             <i className="fas fa-chart-bar" style={{ marginRight: '8px' }}></i>
             View Reports
           </button>
@@ -439,7 +394,7 @@ const TrialDataCleanupModal = ({ onSuccess }) => {
       if (response.ok) {
         alert('Trial data cleaned up successfully!');
         onSuccess();
-        window.location.reload(); // Refresh to see updated data
+        window.location.reload();
       } else {
         const error = await response.json();
         alert(`Error: ${error.message}`);

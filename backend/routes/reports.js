@@ -103,8 +103,8 @@ router.get('/billing', async (req, res) => {
         COALESCE(SUM(r.amount), 0) as received_amount,
         (i.total_amount - COALESCE(SUM(r.amount), 0)) as pending_amount,
         CASE 
-          WHEN i.due_date < CURDATE() AND i.status != 'paid' THEN 
-            DATEDIFF(CURDATE(), i.due_date)
+          WHEN i.due_date < DATE('now') AND i.status != 'paid' THEN 
+            CAST((JULIANDAY('now') - JULIANDAY(i.due_date)) AS INTEGER)
           ELSE 0 
         END as days_overdue
       FROM invoices i
@@ -117,12 +117,12 @@ router.get('/billing', async (req, res) => {
     const params = [];
     
     if (start_date) {
-      sql += ' AND i.invoice_date >= ?';
+      sql += ' AND DATE(i.invoice_date) >= DATE(?)';
       params.push(start_date);
     }
     
     if (end_date) {
-      sql += ' AND i.invoice_date <= ?';
+      sql += ' AND DATE(i.invoice_date) <= DATE(?)';
       params.push(end_date);
     }
     
@@ -141,7 +141,7 @@ router.get('/billing', async (req, res) => {
     const invoices = await query(sql, params);
 
     // Get payment receipts for detailed report
-    const receipts = await query(`
+    let receiptSql = `
       SELECT 
         r.*,
         i.invoice_number,
@@ -150,10 +150,20 @@ router.get('/billing', async (req, res) => {
       LEFT JOIN invoices i ON r.invoice_id = i.id
       LEFT JOIN clients c ON i.client_id = c.id
       WHERE 1=1
-      ${start_date ? 'AND r.receipt_date >= ?' : ''}
-      ${end_date ? 'AND r.receipt_date <= ?' : ''}
-      ORDER BY r.receipt_date DESC
-    `, [...(start_date ? [start_date] : []), ...(end_date ? [end_date] : [])]);
+    `;
+    
+    const receiptParams = [];
+    if (start_date) {
+      receiptSql += ' AND DATE(r.receipt_date) >= DATE(?)';
+      receiptParams.push(start_date);
+    }
+    if (end_date) {
+      receiptSql += ' AND DATE(r.receipt_date) <= DATE(?)';
+      receiptParams.push(end_date);
+    }
+    receiptSql += ' ORDER BY r.receipt_date DESC';
+
+    const receipts = await query(receiptSql, receiptParams);
 
     if (format === 'pdf') {
       await generateBillingPDF(res, invoices, receipts, { start_date, end_date, status });

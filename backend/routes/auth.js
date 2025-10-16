@@ -6,10 +6,101 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Emergency Recovery Configuration
+const EMERGENCY_CONFIG = {
+  MAX_FAILED_ATTEMPTS: 5,
+  EMERGENCY_WINDOW_HOURS: 0.25,
+  RESET_AFTER_HOURS: 0.25
+};
+
+// Track failed login attempts
+const trackFailedAttempt = async (email, ip) => {
+  try {
+    const existing = await query(
+      'SELECT * FROM emergency_recovery WHERE email = ? ORDER BY created_at DESC LIMIT 1',
+      [email]
+    );
+
+    const now = new Date();
+    
+    if (existing.length > 0) {
+      const record = existing[0];
+      const firstFailed = new Date(record.first_failed_attempt);
+      const hoursSinceFirst = (now - firstFailed) / (1000 * 60 * 60);
+      
+      if (hoursSinceFirst > EMERGENCY_CONFIG.RESET_AFTER_HOURS) {
+        await query(
+          'INSERT INTO emergency_recovery (email, failed_attempts, first_failed_attempt, ip_address) VALUES (?, 1, ?, ?)',
+          [email, now.toISOString(), ip]
+        );
+      } else {
+        const newAttempts = record.failed_attempts + 1;
+        
+        if (newAttempts >= EMERGENCY_CONFIG.MAX_FAILED_ATTEMPTS && !record.emergency_mode_enabled) {
+          const expiresAt = new Date(now.getTime() + EMERGENCY_CONFIG.EMERGENCY_WINDOW_HOURS * 60 * 60 * 1000);
+          
+          await query(
+            'UPDATE emergency_recovery SET failed_attempts = ?, emergency_mode_enabled = 1, emergency_mode_expires = ?, updated_at = ? WHERE id = ?',
+            [newAttempts, expiresAt.toISOString(), now.toISOString(), record.id]
+          );
+          
+          return { emergencyActivated: true, expiresAt };
+        } else {
+          await query(
+            'UPDATE emergency_recovery SET failed_attempts = ?, updated_at = ? WHERE id = ?',
+            [newAttempts, now.toISOString(), record.id]
+          );
+        }
+      }
+    } else {
+      await query(
+        'INSERT INTO emergency_recovery (email, failed_attempts, first_failed_attempt, ip_address) VALUES (?, 1, ?, ?)',
+        [email, now.toISOString(), ip]
+      );
+    }
+    
+    return { emergencyActivated: false };
+  } catch (error) {
+    console.error('Error tracking failed attempt:', error);
+    return { emergencyActivated: false };
+  }
+};
+
+const resetFailedAttempts = async (email) => {
+  try {
+    await query(
+      'DELETE FROM emergency_recovery WHERE email = ?',
+      [email]
+    );
+    console.log(`✅ Cleared emergency recovery records for ${email}`);
+  } catch (error) {
+    console.error('Error resetting failed attempts:', error);
+  }
+};
+
+// NEW: Check if real admin exists (excluding demo)
+router.get('/check-admin-exists', async (req, res) => {
+  try {
+    const admins = await query(
+      'SELECT COUNT(*) as count FROM staff WHERE role = ? AND email != ? AND status = ?',
+      ['admin', 'admin@ca-office.com', 'active']
+    );
+    
+    res.json({
+      success: true,
+      adminExists: admins[0].count > 0
+    });
+  } catch (error) {
+    console.error('Error checking admin existence:', error);
+    res.json({ success: true, adminExists: false });
+  }
+});
+
 // Login endpoint
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -18,7 +109,10 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Try database first, fallback to demo mode
+    console.log('=== LOGIN ATTEMPT ===');
+    console.log('Email:', email);
+    console.log('IP:', ip);
+
     try {
       const users = await query(
         'SELECT * FROM staff WHERE email = ? AND status = ?',
@@ -27,16 +121,24 @@ router.post('/login', async (req, res) => {
       
       if (users.length > 0) {
         const user = users[0];
+        
+        console.log('User found:', user.id, user.name);
+        console.log('Stored hash length:', user.password.length);
+        console.log('Stored hash starts with:', user.password.substring(0, 7));
+        
         const isValidPassword = await bcrypt.compare(password, user.password);
         
+        console.log('Password valid:', isValidPassword);
+        
         if (isValidPassword) {
-          // Update last_login (SQLite compatible)
-          await query(
-            'UPDATE staff SET last_login = CURRENT_TIMESTAMP WHERE id = ?', 
-            [user.id]
-          );
-
-          // Auto-mark attendance on first login of the day
+          await resetFailedAttempts(email);
+          
+          try {
+            await query('UPDATE staff SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+          } catch (err) {
+            console.log('⚠️  Could not update last_login (column may not exist)');
+          }
+          
           const today = new Date().toISOString().split('T')[0];
           const attendanceExists = await query(
             'SELECT id FROM attendance WHERE staff_id = ? AND attendance_date = ?',
@@ -49,9 +151,7 @@ router.post('/login', async (req, res) => {
             
             if (enableAttendance) {
               const now = new Date();
-              const checkInTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM format
-              
-              // Check if late (after 9:15 AM)
+              const checkInTime = now.toTimeString().split(' ')[0].substring(0, 5);
               const lateThreshold = new Date(now);
               lateThreshold.setHours(9, 15, 0, 0);
               const status = now > lateThreshold ? 'late' : 'present';
@@ -68,15 +168,15 @@ router.post('/login', async (req, res) => {
             }
           }
 
-          // Generate JWT token
           const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role },
             process.env.JWT_SECRET || 'enhanced-ca-office-secret-key',
             { expiresIn: process.env.TOKEN_EXPIRY || '24h' }
           );
 
-          // Remove password from response
           const { password: _, ...userWithoutPassword } = user;
+
+          console.log('✅ Login successful for:', email);
 
           return res.json({
             success: true,
@@ -85,17 +185,66 @@ router.post('/login', async (req, res) => {
             message: 'Login successful',
             attendance_marked: attendanceMarked
           });
+        } else {
+          console.log('❌ Invalid password for:', email);
+          
+          const result = await trackFailedAttempt(email, ip);
+          
+          if (result.emergencyActivated) {
+            return res.status(401).json({
+              success: false,
+              message: 'Invalid password',
+              emergency_mode: true,
+              emergency_message: `Emergency recovery mode activated! You have ${EMERGENCY_CONFIG.EMERGENCY_WINDOW_HOURS * 60} minutes to reset your password.`,
+              attempts_remaining: 0
+            });
+          }
+          
+          const currentAttempts = await query(
+            'SELECT failed_attempts FROM emergency_recovery WHERE email = ? ORDER BY created_at DESC LIMIT 1',
+            [email]
+          );
+          
+          const attempts = currentAttempts.length > 0 ? currentAttempts[0].failed_attempts : 0;
+          const remaining = EMERGENCY_CONFIG.MAX_FAILED_ATTEMPTS - attempts;
+          
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid email or password',
+            attempts_remaining: remaining > 0 ? remaining : 0,
+            emergency_mode: false
+          });
         }
+      } else {
+        console.log('❌ User not found:', email);
+        await trackFailedAttempt(email, ip);
       }
     } catch (dbError) {
       console.error('Database error during login:', dbError);
       console.log('Database not available, using demo mode');
     }
 
-    // Demo mode fallback
+    // UPDATED: Demo mode fallback - Only if no real admin exists
     if (email === 'admin@ca-office.com' && password === 'admin123') {
+      try {
+        const realAdmins = await query(
+          'SELECT COUNT(*) as count FROM staff WHERE role = ? AND email != ? AND status = ?',
+          ['admin', 'admin@ca-office.com', 'active']
+        );
+        
+        if (realAdmins[0].count > 0) {
+          console.log('❌ Demo login blocked - Real admin exists');
+          return res.status(403).json({
+            success: false,
+            message: 'Demo login has been disabled. A real administrator account exists. Please use your credentials.'
+          });
+        }
+      } catch (err) {
+        console.log('Error checking real admin:', err);
+      }
+
       const demoUser = {
-        id: 1,
+        id: 999999,
         name: 'Demo Administrator',
         email: 'admin@ca-office.com',
         role: 'admin',
@@ -108,16 +257,18 @@ router.post('/login', async (req, res) => {
         { expiresIn: process.env.TOKEN_EXPIRY || '24h' }
       );
 
+      console.log('✅ Demo login successful - No real admin exists yet');
+
       return res.json({
         success: true,
         token,
         user: demoUser,
-        message: 'Demo login successful',
-        attendance_marked: false
+        message: '⚠️ Demo Mode: Create a real admin account to disable demo login',
+        attendance_marked: false,
+        is_demo: true
       });
     }
 
-    // Invalid credentials
     res.status(401).json({
       success: false,
       message: 'Invalid email or password'
@@ -128,6 +279,143 @@ router.post('/login', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Login failed. Please try again.'
+    });
+  }
+});
+
+// Emergency password reset
+router.post('/emergency-reset', async (req, res) => {
+  try {
+    const { email, new_password } = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
+
+    console.log('=== EMERGENCY RESET ATTEMPT ===');
+    console.log('Email:', email);
+
+    if (!email || !new_password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and new password are required'
+      });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    const recovery = await query(
+      'SELECT * FROM emergency_recovery WHERE email = ? AND emergency_mode_enabled = 1 AND recovery_used = 0 ORDER BY created_at DESC LIMIT 1',
+      [email]
+    );
+
+    if (recovery.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Emergency recovery mode not active or already used'
+      });
+    }
+
+    const recoveryRecord = recovery[0];
+    const now = new Date();
+    const expiresAt = new Date(recoveryRecord.emergency_mode_expires);
+
+    if (now > expiresAt) {
+      return res.status(403).json({
+        success: false,
+        message: 'Emergency recovery window has expired'
+      });
+    }
+
+    const users = await query(
+      'SELECT id, name, email FROM staff WHERE email = ?',
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = users[0];
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    
+    console.log('New hash length:', hashedPassword.length);
+    console.log('New hash starts with:', hashedPassword.substring(0, 7));
+    
+    await query(
+      'UPDATE staff SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [hashedPassword, user.id]
+    );
+
+    await query('DELETE FROM emergency_recovery WHERE email = ?', [email]);
+
+    try {
+      await query(
+        'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, timestamp) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+        [user.id, 'EMERGENCY_PASSWORD_RESET', 'staff', user.id, ip]
+      );
+    } catch (auditError) {
+      console.log('Could not record emergency reset in audit log');
+    }
+
+    console.log(`✅ Emergency password reset completed for ${email}`);
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.'
+    });
+
+  } catch (error) {
+    console.error('Emergency password reset error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resetting password'
+    });
+  }
+});
+
+// Check emergency recovery status
+router.get('/emergency-status/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const recovery = await query(
+      'SELECT emergency_mode_enabled, emergency_mode_expires, failed_attempts, recovery_used FROM emergency_recovery WHERE email = ? ORDER BY created_at DESC LIMIT 1',
+      [email]
+    );
+
+    if (recovery.length === 0) {
+      return res.json({
+        success: true,
+        emergency_mode: false,
+        failed_attempts: 0
+      });
+    }
+
+    const record = recovery[0];
+    const now = new Date();
+    const isActive = record.emergency_mode_enabled && 
+                    !record.recovery_used &&
+                    record.emergency_mode_expires && 
+                    new Date(record.emergency_mode_expires) > now;
+
+    res.json({
+      success: true,
+      emergency_mode: isActive,
+      failed_attempts: record.failed_attempts,
+      expires_at: record.emergency_mode_expires
+    });
+
+  } catch (error) {
+    console.error('Emergency status check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error checking emergency status'
     });
   }
 });
@@ -147,7 +435,6 @@ router.get('/verify', async (req, res) => {
       });
     }
 
-    // Verify JWT token
     const decoded = jwt.verify(
       token, 
       process.env.JWT_SECRET || 'enhanced-ca-office-secret-key'
@@ -155,7 +442,6 @@ router.get('/verify', async (req, res) => {
 
     const userId = decoded.id || decoded.userId;
 
-    // Try database first, fallback to demo
     try {
       const users = await query(
         'SELECT id, name, email, role, status, firm_id FROM staff WHERE id = ? AND status = ?', 
@@ -170,15 +456,13 @@ router.get('/verify', async (req, res) => {
       }
     } catch (dbError) {
       console.error('Database error during token verification:', dbError);
-      console.log('Database not available, using demo mode');
     }
 
-    // Demo mode fallback
-    if (decoded.email === 'admin@ca-office.com') {
+    if (decoded.email === 'admin@ca-office.com' && decoded.id === 999999) {
       return res.json({
         success: true,
         user: {
-          id: 1,
+          id: 999999,
           name: 'Demo Administrator',
           email: 'admin@ca-office.com',
           role: 'admin',
@@ -221,6 +505,9 @@ router.put('/reset-password/:userId', requireAdmin, async (req, res) => {
     const { userId } = req.params;
     const { new_password } = req.body;
 
+    console.log('=== ADMIN RESET PASSWORD ===');
+    console.log('Target user ID:', userId);
+
     if (!new_password) {
       return res.status(400).json({
         success: false,
@@ -235,7 +522,6 @@ router.put('/reset-password/:userId', requireAdmin, async (req, res) => {
       });
     }
 
-    // Check if user exists
     const users = await query(
       'SELECT id, name, email FROM staff WHERE id = ?', 
       [userId]
@@ -248,12 +534,19 @@ router.put('/reset-password/:userId', requireAdmin, async (req, res) => {
       });
     }
 
-    // Hash new password and update
-    const hashedPassword = await bcrypt.hash(new_password, 12);
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    
+    console.log('New hash length:', hashedPassword.length);
+    console.log('New hash starts with:', hashedPassword.substring(0, 7));
+    
     await query(
       'UPDATE staff SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', 
       [hashedPassword, userId]
     );
+
+    await query('DELETE FROM emergency_recovery WHERE email = ?', [users[0].email]);
+
+    console.log(`✅ Admin reset password for user ${userId}`);
 
     res.json({
       success: true,
@@ -286,22 +579,18 @@ router.post('/logout', async (req, res) => {
         
         const userId = decoded.id || decoded.userId;
         
-        // Log logout event for audit trail
         console.log(`User ${decoded.email} (ID: ${userId}) logged out at ${new Date().toISOString()}`);
         
-        // Optional: Record in audit log if table exists
         try {
           await query(
             'INSERT INTO audit_logs (user_id, action, entity_type, ip_address, timestamp) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
             [userId, 'LOGOUT', 'auth', req.ip]
           );
         } catch (auditError) {
-          // Ignore audit log errors
-          console.log('Could not record logout in audit log:', auditError.message);
+          console.log('Could not record logout in audit log');
         }
         
       } catch (tokenError) {
-        // Token invalid or expired, that's ok for logout
         console.log('Logout attempt with invalid/expired token');
       }
     }
@@ -312,7 +601,6 @@ router.post('/logout', async (req, res) => {
     });
 
   } catch (error) {
-    // Always return success for logout
     console.error('Logout error:', error);
     res.json({
       success: true,
@@ -321,11 +609,14 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// Change password endpoint (for staff to change their own password)
+// Change password endpoint
 router.put('/change-password', requireAuth, async (req, res) => {
   try {
     const { current_password, new_password } = req.body;
     const userId = req.user.id;
+
+    console.log('=== CHANGE PASSWORD ===');
+    console.log('User ID:', userId);
 
     if (!current_password || !new_password) {
       return res.status(400).json({
@@ -341,7 +632,6 @@ router.put('/change-password', requireAuth, async (req, res) => {
       });
     }
 
-    // Get user's current password
     const users = await query(
       'SELECT id, name, email, password FROM staff WHERE id = ?', 
       [userId]
@@ -355,9 +645,13 @@ router.put('/change-password', requireAuth, async (req, res) => {
     }
 
     const user = users[0];
-
-    // Verify current password
+    
+    console.log('Current hash length:', user.password.length);
+    
     const isValidPassword = await bcrypt.compare(current_password, user.password);
+    
+    console.log('Current password valid:', isValidPassword);
+    
     if (!isValidPassword) {
       return res.status(400).json({
         success: false,
@@ -365,7 +659,6 @@ router.put('/change-password', requireAuth, async (req, res) => {
       });
     }
 
-    // Check if new password is different
     const isSamePassword = await bcrypt.compare(new_password, user.password);
     if (isSamePassword) {
       return res.status(400).json({
@@ -374,22 +667,28 @@ router.put('/change-password', requireAuth, async (req, res) => {
       });
     }
 
-    // Hash new password and update
-    const hashedPassword = await bcrypt.hash(new_password, 12);
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+    
+    console.log('New hash length:', hashedPassword.length);
+    console.log('New hash starts with:', hashedPassword.substring(0, 7));
+    
     await query(
       'UPDATE staff SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', 
       [hashedPassword, userId]
     );
 
-    // Log password change for audit
+    await query('DELETE FROM emergency_recovery WHERE email = ?', [user.email]);
+
     try {
       await query(
         'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address, timestamp) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
         [userId, 'PASSWORD_CHANGE', 'staff', userId, req.ip]
       );
     } catch (auditError) {
-      console.log('Could not record password change in audit log:', auditError.message);
+      console.log('Could not record password change in audit log');
     }
+
+    console.log(`✅ Password changed successfully for user ${userId}`);
 
     res.json({
       success: true,

@@ -6,12 +6,10 @@ const bcrypt = require('bcryptjs');
 const isElectronApp = process.env.ELECTRON_APP === 'true';
 const userDataPath = process.env.USER_DATA_PATH || './data';
 
-// SQLite database file path
 const dbPath = isElectronApp 
   ? path.join(userDataPath, 'ca_office.db')
   : path.join(__dirname, '../data/ca_office.db');
 
-// Ensure database directory exists
 const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
@@ -45,14 +43,12 @@ const testConnection = () => {
   }
 };
 
-// FIXED: Async query function for compatibility with license routes
 const query = async (sql, params = []) => {
   try {
     if (!db) {
       initializeConnection();
     }
     
-    // Make it async compatible
     return new Promise((resolve, reject) => {
       try {
         const sqlUpper = sql.trim().toUpperCase();
@@ -84,11 +80,9 @@ const initializeDatabase = async () => {
       return false;
     }
 
-    // Always create/update all tables
     console.log('📋 Creating/updating database structure...');
     await createAllTables();
     
-    // REMOVED: ensureDefaultFirm() - No longer auto-creating default firm
     await ensureDefaultAdmin();
     await ensureDefaultTaskTypes();
     await ensureDefaultSettings();
@@ -103,7 +97,22 @@ const initializeDatabase = async () => {
 
 const createAllTables = async () => {
   const tables = [
-    // Licenses table (FIRST - for license validation)
+    // Emergency Recovery table - ADDED FOR PASSWORD RESET
+    `CREATE TABLE IF NOT EXISTS emergency_recovery (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      failed_attempts INTEGER DEFAULT 0,
+      first_failed_attempt DATETIME,
+      emergency_mode_enabled INTEGER DEFAULT 0,
+      emergency_mode_expires DATETIME,
+      recovery_used INTEGER DEFAULT 0,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    
+    // Licenses table
     `CREATE TABLE IF NOT EXISTS licenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       license_key TEXT UNIQUE NOT NULL,
@@ -121,7 +130,7 @@ const createAllTables = async () => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     
-    // Firms table (SECOND - referenced by other tables)
+    // Firms table
     `CREATE TABLE IF NOT EXISTS firms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -146,7 +155,7 @@ const createAllTables = async () => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     
-    // Staff table - FIXED: Removed DEFAULT firm_id
+    // Staff table
     `CREATE TABLE IF NOT EXISTS staff (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -189,7 +198,7 @@ const createAllTables = async () => {
       FOREIGN KEY (firm_id) REFERENCES firms(id)
     )`,
     
-    // Staff firms junction table (for multi-firm support)
+    // Staff firms junction table
     `CREATE TABLE IF NOT EXISTS staff_firms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staff_id INTEGER NOT NULL,
@@ -204,7 +213,7 @@ const createAllTables = async () => {
       UNIQUE(staff_id, firm_id)
     )`,
     
-    // Clients table - FIXED: Removed DEFAULT firm_id
+    // Clients table
     `CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -244,7 +253,7 @@ const createAllTables = async () => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     
-    // Tasks table - FIXED: Removed DEFAULT firm_id
+    // Tasks table
     `CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -301,7 +310,7 @@ const createAllTables = async () => {
       FOREIGN KEY (changed_by) REFERENCES staff(id) ON DELETE SET NULL
     )`,
     
-    // Basic Leave tables
+    // Leave tables
     `CREATE TABLE IF NOT EXISTS leaves (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staff_id INTEGER NOT NULL,
@@ -326,7 +335,7 @@ const createAllTables = async () => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     
-    // Basic Skills tables
+    // Skills tables
     `CREATE TABLE IF NOT EXISTS staff_skills (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staff_id INTEGER NOT NULL,
@@ -346,7 +355,7 @@ const createAllTables = async () => {
       FOREIGN KEY (staff_id) REFERENCES staff(id)
     )`,
     
-    // Invoices table - FIXED: Removed DEFAULT firm_id
+    // Invoices table
     `CREATE TABLE IF NOT EXISTS invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       invoice_number TEXT UNIQUE NOT NULL,
@@ -374,7 +383,7 @@ const createAllTables = async () => {
       FOREIGN KEY (firm_id) REFERENCES firms(id)
     )`,
     
-    // Receipts table - FIXED: Removed DEFAULT firm_id
+    // Receipts table
     `CREATE TABLE IF NOT EXISTS receipts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       receipt_number TEXT UNIQUE NOT NULL,
@@ -394,7 +403,7 @@ const createAllTables = async () => {
       FOREIGN KEY (firm_id) REFERENCES firms(id)
     )`,
     
-    // Attendance table - FIXED: Removed DEFAULT firm_id
+    // Attendance table
     `CREATE TABLE IF NOT EXISTS attendance (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staff_id INTEGER NOT NULL,
@@ -418,7 +427,7 @@ const createAllTables = async () => {
       UNIQUE(staff_id, attendance_date)
     )`,
     
-    // Audit logs table - FIXED: Removed DEFAULT firm_id
+    // Audit logs table
     `CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -436,7 +445,7 @@ const createAllTables = async () => {
       FOREIGN KEY (firm_id) REFERENCES firms(id)
     )`,
     
-    // Settings table - FIXED: Removed DEFAULT firm_id
+    // Settings table
     `CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       setting_key TEXT UNIQUE NOT NULL,
@@ -457,7 +466,6 @@ const createAllTables = async () => {
     )`
   ];
 
-  // Execute all table creation statements
   for (const sql of tables) {
     try {
       db.exec(sql);
@@ -471,8 +479,6 @@ const createAllTables = async () => {
   console.log('✅ All database tables created/updated successfully');
 };
 
-// REMOVED: ensureDefaultFirm() function - No longer auto-creating default firm
-
 const ensureDefaultAdmin = async () => {
   try {
     const adminExists = db.prepare('SELECT id FROM staff WHERE role = ? LIMIT 1').get('admin');
@@ -480,7 +486,6 @@ const ensureDefaultAdmin = async () => {
     if (!adminExists) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       
-      // FIXED: Create admin without firm_id requirement
       db.prepare(`
         INSERT INTO staff (name, email, password, role, status) 
         VALUES (?, ?, ?, ?, ?)
@@ -553,7 +558,7 @@ const ensureDefaultSettings = async () => {
         insertSetting.run(setting.setting_key, setting.setting_value, setting.description);
       });
       
-      console.log('✅ Default settings created (no firm association)');
+      console.log('✅ Default settings created');
     }
   } catch (error) {
     console.error('Error ensuring default settings:', error.message);
@@ -598,7 +603,6 @@ const optimizeDatabase = () => {
   }
 };
 
-// Initialize on module load
 initializeConnection();
 
 module.exports = { 

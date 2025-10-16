@@ -54,7 +54,7 @@ const Sidebar = () => {
     }}>
       
       {/* Current Firm Section - PRESERVE YOUR EXISTING DESIGN */}
-      {selectedFirm && (
+      {selectedFirm && selectedFirm.id && (
         <div style={{
           background: 'linear-gradient(135deg, #667eea, #764ba2)',
           color: 'white',
@@ -65,7 +65,7 @@ const Sidebar = () => {
             <i className="fas fa-building" style={{ fontSize: '18px' }}></i>
             <div>
               <div style={{ fontWeight: '600', fontSize: '16px' }}>
-                {selectedFirm.name || selectedFirm.firm_name || 'DILIP HINGER & ASSOCIATES'}
+                {selectedFirm.name || selectedFirm.firm_name || 'No Firm Selected'}
               </div>
               <div style={{ fontSize: '12px', opacity: '0.9' }}>
                 Code: {selectedFirm.code || selectedFirm.firm_code || 'FIRM001'}
@@ -73,7 +73,7 @@ const Sidebar = () => {
             </div>
           </div>
           <div style={{ fontSize: '11px', opacity: '0.8' }}>
-            {selectedFirm.city || selectedFirm.firm_city || 'Chittorgarh'} • {selectedFirm.phone || selectedFirm.firm_phone || '9411114765'}
+            {selectedFirm.city || selectedFirm.firm_city || 'Chittorgarh'} • {selectedFirm.phone || selectedFirm.firm_phone || '941111476'}
           </div>
         </div>
       )}

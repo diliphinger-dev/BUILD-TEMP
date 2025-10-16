@@ -127,13 +127,18 @@ export const AuthProvider = ({ children }) => {
       return { 
         success: false, 
         error: response.data.message || 'Login failed',
-        message: response.data.message || 'Login failed'
+        message: response.data.message || 'Login failed',
+        response: response.data  // ✅ ADDED: Pass full response for emergency_mode
       };
     } catch (error) {
+      // ✅ CRITICAL FIX: Return full error response including emergency_mode
+      const errorData = error.response?.data || {};
+      
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Network error',
-        message: error.response?.data?.message || 'Network error'
+        error: errorData.message || 'Network error',
+        message: errorData.message || 'Network error',
+        response: errorData  // ✅ ADDED: Passes emergency_mode, attempts_remaining, etc.
       };
     }
   };

@@ -35,30 +35,25 @@ const Navigation = () => {
     }
   };
 
-  const fetchSelectedFirm = async () => {
-    try {
-      const token = localStorage.getItem('ca_auth_token') || localStorage.getItem('token');
-      const response = await fetch('/api/firms/selected', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedFirm(data.firm || data.data);
+  // REPLACE entire fetchSelectedFirm function:
+const fetchSelectedFirm = async () => {
+  try {
+    const token = localStorage.getItem('ca_auth_token') || localStorage.getItem('token');
+    const response = await fetch('/api/firms/selected', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.error('Error fetching selected firm:', error);
-      // Set default firm for demo - matches your existing format
-      setSelectedFirm({
-        name: 'DILIP HINGER & ASSOCIATES',
-        code: 'FIRM001',
-        city: 'Chittorgarh',
-        phone: '9411114765'
-      });
+    });
+    if (response.ok) {
+      const data = await response.json();
+      setSelectedFirm(data.firm || data.data);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching selected firm:', error);
+    // REMOVED: Default firm fallback
+  }
+};
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
@@ -97,7 +92,7 @@ const Navigation = () => {
         </div>
 
         {/* NEW: Selected Firm Display - Added to existing header */}
-        {selectedFirm && (
+        {selectedFirm && selectedFirm.id && (
           <div style={{
             background: 'linear-gradient(135deg, #8e44ad, #9b59b6)',
             color: 'white',
